@@ -1,0 +1,77 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "types": [
+      "node"
+    ],
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "apps/web/src/*"
+      ],
+      "@wevlo/audit-activity": [
+        "packages/audit-activity/src/index.ts"
+      ],
+      "@wevlo/auth": [
+        "packages/auth/src/index.ts"
+      ],
+      "@wevlo/authz": [
+        "packages/authz/src/index.ts"
+      ],
+      "@wevlo/contracts": [
+        "packages/contracts/src/index.ts"
+      ],
+      "@wevlo/core": [
+        "packages/core/src/index.ts"
+      ],
+      "@wevlo/data-access": [
+        "packages/data-access/src/index.ts"
+      ],
+      "@wevlo/identity-tenancy": [
+        "packages/identity-tenancy/src/index.ts"
+      ],
+      "@wevlo/integrations": [
+        "packages/integrations/src/index.ts"
+      ],
+      "@wevlo/issues": [
+        "packages/issues/src/index.ts"
+      ],
+      "@wevlo/notifications": [
+        "packages/notifications/src/index.ts"
+      ],
+      "@wevlo/projects": [
+        "packages/projects/src/index.ts"
+      ],
+      "@wevlo/projections-search": [
+        "packages/projections-search/src/index.ts"
+      ],
+      "@wevlo/test-kit": [
+        "packages/test-kit/src/index.ts"
+      ],
+      "@wevlo/ui-core": [
+        "packages/ui-core/src/index.ts"
+      ],
+      "@wevlo/ui-native": [
+        "packages/ui-native/src/index.tsx"
+      ],
+      "@wevlo/ui-web": [
+        "packages/ui-web/src/index.tsx"
+      ]
+    }
+  }
+}

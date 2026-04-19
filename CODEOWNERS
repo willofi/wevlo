@@ -1,0 +1,22 @@
+* @pm @reviewer @qa
+
+/apps/api/ @backend-dev-a @integration-dev @reviewer
+/apps/worker/ @integration-dev @reviewer @qa
+/apps/web/ @frontend-dev-a @reviewer @qa
+/apps/desktop/ @frontend-dev-a @reviewer @qa
+/apps/mobile/ @frontend-dev-b @reviewer @qa
+
+/packages/auth/ @backend-dev-a @reviewer
+/packages/authz/ @backend-dev-a @reviewer
+/packages/identity-tenancy/ @backend-dev-a @reviewer
+/packages/projects/ @backend-dev-b @reviewer
+/packages/issues/ @backend-dev-b @reviewer
+/packages/audit-activity/ @backend-dev-b @reviewer
+/packages/integrations/ @integration-dev @reviewer
+/packages/contracts/ @planner @reviewer
+/packages/core/ @planner @reviewer
+/packages/ui-core/ @frontend-dev-a @frontend-dev-b @reviewer
+/packages/ui-web/ @frontend-dev-a @reviewer
+/packages/ui-native/ @frontend-dev-b @reviewer
+/tests/replays/ @qa @integration-dev @reviewer
+/docs/adr/ @pm @planner @reviewer
