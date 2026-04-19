@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wevlo-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wevlo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wevlo}
+      POSTGRES_DB: ${POSTGRES_DB:-wevlo}
+    volumes:
+      - wevlo-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  wevlo-postgres-data:

@@ -1,0 +1,27 @@
+{
+  "name": "@wevlo/data-access",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@wevlo/contracts": "workspace:*",
+    "dotenv": "catalog:",
+    "kysely": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --outDir dist",
+    "lint": "eslint src --ext .ts",
+    "migrate": "node --import tsx src/cli/migrate.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:contracts": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run --passWithNoTests"
+  }
+}

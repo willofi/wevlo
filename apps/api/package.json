@@ -1,0 +1,31 @@
+{
+  "name": "@wevlo/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@fastify/cors": "catalog:",
+    "@wevlo/audit-activity": "workspace:*",
+    "@wevlo/auth": "workspace:*",
+    "@wevlo/authz": "workspace:*",
+    "@wevlo/contracts": "workspace:*",
+    "@wevlo/data-access": "workspace:*",
+    "@wevlo/identity-tenancy": "workspace:*",
+    "@wevlo/integrations": "workspace:*",
+    "@wevlo/issues": "workspace:*",
+    "@wevlo/projects": "workspace:*",
+    "dotenv": "catalog:",
+    "fastify": "latest",
+    "zod": "latest"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json --outDir dist",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:contracts": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run --passWithNoTests"
+  }
+}

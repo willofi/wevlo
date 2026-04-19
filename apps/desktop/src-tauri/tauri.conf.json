@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "wevlo",
+  "version": "0.1.0",
+  "identifier": "com.wevlo.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --dir ../.. --filter @wevlo/desktop dev",
+    "beforeBuildCommand": "pnpm --dir ../.. --filter @wevlo/desktop build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "wevlo",
+        "width": 1280,
+        "height": 820
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@wevlo/ui-native",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "dependencies": {
+    "@wevlo/ui-core": "workspace:*",
+    "react": "latest",
+    "react-native": "latest"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --outDir dist",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:contracts": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run --passWithNoTests"
+  }
+}

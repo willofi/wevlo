@@ -1,0 +1,23 @@
+{
+  "name": "@wevlo/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@wevlo/ui-native": "workspace:*",
+    "expo": "latest",
+    "expo-router": "latest",
+    "react": "latest",
+    "react-native": "latest"
+  },
+  "scripts": {
+    "dev": "expo start",
+    "build": "expo export --platform ios --output-dir dist/ios && expo export --platform android --output-dir dist/android",
+    "lint": "eslint app --ext .ts,.tsx",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:contracts": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run --passWithNoTests"
+  }
+}

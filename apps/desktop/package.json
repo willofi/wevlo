@@ -1,0 +1,28 @@
+{
+  "name": "@wevlo/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@wevlo/ui-web": "workspace:*",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "latest",
+    "@tauri-apps/cli": "latest",
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:contracts": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run --passWithNoTests",
+    "tauri": "tauri"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@wevlo/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@wevlo/audit-activity": "workspace:*",
+    "@wevlo/data-access": "workspace:*",
+    "@wevlo/integrations": "workspace:*",
+    "@wevlo/issues": "workspace:*"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json --outDir dist",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:contracts": "vitest run --passWithNoTests",
+    "test:e2e": "vitest run --passWithNoTests"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "wevlo",
+    "slug": "wevlo",
+    "scheme": "wevlo",
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
