@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "allowJs": false,
+    "incremental": true,
+    "noEmit": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/**/*"
+  ]
+}
