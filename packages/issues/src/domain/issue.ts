@@ -1,7 +1,12 @@
 import type {
   IssueCommentDto,
+  IssueAttachmentDto,
+  IssueLabelDto,
   IssueDetailDto,
+  IssueMentionDto,
   IssuePriority,
+  IssueReactionDto,
+  IssueReferenceDto,
   IssueSourceLinkDto,
   IssueState,
   IssueTriageStatus
@@ -23,27 +28,38 @@ export type IssueField =
   | "state"
   | "triageStatus"
   | "reporterUserId"
-  | "assigneeUserId";
+  | "assigneeUserId"
+  | "dueDate"
+  | "labels";
 
 export type IssueCreateInput = {
   projectId: ProjectId;
   title: string;
+  parentIssueId?: string | null;
   projectKey?: string;
   issueNumber?: number;
   issueKey?: string;
   description?: string;
+  descriptionMentions?: IssueMentionDto[];
   priority?: IssuePriority;
   state?: IssueState;
   triageStatus?: IssueTriageStatus;
   reporterUserId?: string;
   assigneeUserId?: string | null;
+  dueDate?: string | null;
+  labels?: IssueLabelDto[];
+  attachments?: IssueAttachmentDto[];
   sourceLinks?: IssueSourceLinkDto[];
   comments?: IssueComment[];
+  reactions?: IssueReactionDto[];
 };
 
 export type IssuePatch = {
   assigneeUserId?: string | null;
   description?: string;
+  descriptionMentions?: IssueMentionDto[];
+  dueDate?: string | null;
+  labels?: IssueLabelDto[];
   priority?: IssuePriority;
   reporterUserId?: string;
   title?: string;
@@ -71,6 +87,16 @@ const issueSourceLinkDefaults: IssueSourceLinkDto = {
   provider: "native",
   sourceOfTruth: "local"
 };
+
+const toIssueReference = (issue: Pick<Issue, "assigneeUserId" | "dueDate" | "id" | "issueKey" | "priority" | "state" | "title">): IssueReferenceDto => ({
+  assigneeUserId: issue.assigneeUserId,
+  dueDate: issue.dueDate,
+  id: issue.id,
+  issueKey: issue.issueKey,
+  priority: issue.priority,
+  state: issue.state,
+  title: issue.title
+});
 
 const normalizeIssueKeyPart = (value: string): string => {
   const normalized = value
@@ -116,6 +142,8 @@ export const createIssueComment = (input: {
   authorUserId: string;
   body: string;
   issueId: IssueId;
+  mentions?: IssueComment["mentions"];
+  parentCommentId?: string | null;
 }): IssueComment => {
   const body = input.body.trim();
 
@@ -128,6 +156,9 @@ export const createIssueComment = (input: {
     issueId: input.issueId,
     authorUserId: input.authorUserId,
     body,
+    mentions: input.mentions ?? [],
+    parentCommentId: input.parentCommentId ?? null,
+    reactions: [],
     createdAt: new Date().toISOString()
   };
 };
@@ -153,15 +184,23 @@ export const createIssue = (input: IssueCreateInput): Issue => {
   return {
     id: createIssueId(),
     projectId: input.projectId,
+    parentIssueId: input.parentIssueId ?? null,
     issueNumber,
     issueKey,
     title,
     description: input.description ?? "",
+    descriptionMentions: input.descriptionMentions ?? [],
     priority: input.priority ?? "none",
     state: input.state ?? "backlog",
     triageStatus: input.triageStatus ?? defaultTriageStatus,
     reporterUserId: input.reporterUserId ?? "unknown",
     assigneeUserId: input.assigneeUserId ?? null,
+    dueDate: input.dueDate ?? null,
+    labels: input.labels ?? [],
+    parent: null,
+    subIssues: [],
+    attachments: input.attachments ?? [],
+    reactions: input.reactions ?? [],
     sourceLinks,
     comments: input.comments ?? [],
     createdAt: new Date().toISOString(),
@@ -188,15 +227,19 @@ export const canMutateIssueField = (
     return field === "title" || field === "description" || field === "reporterUserId" || field === "state";
   }
 
-  return field === "priority" || field === "assigneeUserId" || field === "triageStatus";
+  return field === "priority" || field === "assigneeUserId" || field === "triageStatus" || field === "dueDate" || field === "labels";
 };
 
 export const applyIssuePatch = (issue: Issue, patch: IssuePatch, actor: IssueMutator): Issue => {
-  const entries = Object.entries(patch).filter(([, value]) => value !== undefined) as Array<
+  const entries = Object.entries(patch).filter(
+    ([field, value]) => field !== "descriptionMentions" && value !== undefined
+  ) as Array<
     [keyof IssuePatch, NonNullable<IssuePatch[keyof IssuePatch]>]
   >;
 
-  if (entries.length === 0) {
+  const hasDescriptionMentionsChange = patch.descriptionMentions !== undefined;
+
+  if (entries.length === 0 && !hasDescriptionMentionsChange) {
     return issue;
   }
 
@@ -207,10 +250,19 @@ export const applyIssuePatch = (issue: Issue, patch: IssuePatch, actor: IssueMut
       throw new Error(`Issue field ${String(field)} cannot be mutated by ${actor}`);
     }
 
+    console.info(`Applying patch to field ${String(field)} for issue ${issue.issueKey}`);
+
     nextIssue = {
       ...nextIssue,
       [field]: value
     } as Issue;
+  }
+
+  if (patch.description !== undefined) {
+    nextIssue = {
+      ...nextIssue,
+      descriptionMentions: patch.descriptionMentions ?? []
+    };
   }
 
   return {
@@ -230,3 +282,5 @@ export const transitionIssue = (issue: Issue, nextState: IssueState): Issue => {
     updatedAt: new Date().toISOString()
   };
 };
+
+export const asIssueReference = toIssueReference;

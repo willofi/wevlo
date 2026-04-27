@@ -1,6 +1,7 @@
 export * from "./domain/integration";
 export * from "./domain/issue";
 export * from "./domain/invitation";
+export * from "./domain/notification";
 export * from "./domain/project";
 export * from "./domain/project-role";
 export * from "./domain/member";
@@ -13,6 +14,7 @@ export * from "./http/common";
 export * from "./http/integration";
 export * from "./http/issue";
 export * from "./http/me";
+export * from "./http/notification";
 export * from "./http/project";
 export * from "./http/session";
 export * from "./http/workspace";

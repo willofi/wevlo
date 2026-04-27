@@ -15,7 +15,6 @@ import type {
 import { createEntityId } from "@wevlo/core";
 import {
   applyIssuePatch,
-  createIssueComment,
   createIssueUseCase,
   transitionIssue,
   type Issue,
@@ -24,7 +23,6 @@ import {
 
 import type { IntegrationRepository } from "./integration-repository";
 import {
-  buildSyncStatus,
   createIntegrationInstallation,
   createIntegrationProjectLink,
   createWebhookDelivery,
@@ -126,7 +124,10 @@ const mergeRemoteComment = (issue: Issue, provider: IntegrationProvider, comment
         body: comment.body.trim(),
         createdAt: comment.createdAt,
         id: `remote_comment:${provider}:${comment.externalId}`,
-        issueId: issue.id
+        issueId: issue.id,
+        mentions: [],
+        parentCommentId: null,
+        reactions: []
       }
     ],
     updatedAt: new Date().toISOString()

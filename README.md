@@ -44,7 +44,7 @@ Still secondary or not part of the main prototype surface:
 1. Copy environment defaults:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 Recommended local additions:
@@ -52,6 +52,7 @@ Recommended local additions:
 ```env
 NEXTAUTH_URL=http://localhost:3000
 ALLOW_DEV_AUTH=true
+WEVLO_STORAGE_DRIVER=local
 ```
 
 2. Install dependencies:
@@ -66,6 +67,9 @@ pnpm install
 pnpm db:up
 pnpm db:migrate
 ```
+
+The API and worker no longer run migrations at startup. In deployment pipelines, run
+`pnpm --filter @wevlo/data-access migrate` before restarting runtime containers.
 
 4. Start the API and web app in separate terminals:
 
@@ -86,6 +90,17 @@ pnpm --filter @wevlo/web dev
 - The web app issues the session, and the BFF forwards authenticated user context to the API with internal auth headers.
 - Set `NEXTAUTH_URL=http://localhost:3000` for local development to avoid Auth.js callback warnings.
 
+## Storage Modes
+
+- `WEVLO_STORAGE_DRIVER=local` uses local filesystem attachments (`WEVLO_ATTACHMENT_STORAGE_DIR` optional).
+- `WEVLO_STORAGE_DRIVER=supabase_s3` uses Supabase Storage S3 compatibility mode.
+- Supabase S3 mode requires:
+  - `WEVLO_S3_ENDPOINT`
+  - `WEVLO_S3_REGION`
+  - `WEVLO_S3_ACCESS_KEY_ID`
+  - `WEVLO_S3_SECRET_ACCESS_KEY`
+  - `WEVLO_S3_BUCKET`
+
 ## Validation Commands
 
 Use these as the default alpha gate:
@@ -98,3 +113,4 @@ pnpm build
 ```
 
 For the fuller operator flow, see [docs/internal-alpha-runbook.md](./docs/internal-alpha-runbook.md).
+For Mac mini deployment with Supabase, see [docs/deploy-api-macmini.md](./docs/deploy-api-macmini.md).

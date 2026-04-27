@@ -58,7 +58,7 @@ function DraggableIssueCard({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={cn(
-        "block rounded-lg border border-border/80 bg-card/90 px-3 py-3 shadow-none transition-colors hover:bg-secondary/60",
+        "block rounded-lg border border-border/80 bg-card/90 px-3 py-2 shadow-none transition-colors hover:bg-secondary/60",
         (active || isDragging) && "border-primary/50 bg-secondary/70 opacity-80"
       )}
       {...listeners}
@@ -70,8 +70,8 @@ function DraggableIssueCard({
           {issue.priority === "none" ? "No priority" : issue.priority}
         </Badge>
       </div>
-      <div className="mt-2 text-sm font-medium leading-5 text-foreground">{issue.title}</div>
-      <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+      <div className="mt-1.5 text-sm font-medium leading-5 text-foreground">{issue.title}</div>
+      <div className="mt-2.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
         {issue.assigneeUserId ? (
           <span className="flex min-w-0 items-center gap-1.5">
             <Avatar className="size-4 border border-border/60 bg-secondary/60">
@@ -121,11 +121,11 @@ function BoardColumn({
         isOver && "border-primary/50 bg-primary/5"
       )}
     >
-      <div className="flex items-center justify-between border-b border-border/80 px-3 py-3">
+      <div className="flex items-center justify-between border-b border-border/80 px-3 py-2.5">
         <div className="text-sm font-medium text-foreground">{boardLabels[state]}</div>
         <div className="text-xs text-muted-foreground">{issues.length}</div>
       </div>
-      <div className="grid content-start gap-2 p-2">
+      <div className="grid content-start gap-1.5 p-1.5">
         {issues.map((issue) => (
           <DraggableIssueCard
             key={issue.id}

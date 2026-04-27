@@ -1,0 +1,113 @@
+name: Deploy API
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-api.yml"
+      - "apps/api/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+
+concurrency:
+  group: deploy-api-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run DB migrations (idempotency check)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WEVLO_INTERNAL_AUTH_TOKEN: ${{ secrets.WEVLO_INTERNAL_AUTH_TOKEN }}
+          ALLOW_DEV_AUTH: "false"
+        run: |
+          pnpm --filter @wevlo/data-access migrate
+          pnpm --filter @wevlo/data-access migrate
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/api:latest
+            ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+
+      - name: Copy compose template
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.MAC_HOST }}
+          username: ${{ secrets.MAC_USER }}
+          key: ${{ secrets.MAC_SSH_KEY }}
+          source: "deploy/docker-compose.api.yml"
+          target: "/opt/wevlo"
+          strip_components: 1
+
+      - name: Deploy on Mac mini
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GH_SHA: ${{ github.sha }}
+          GH_REPO: ${{ github.repository }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        with:
+          host: ${{ secrets.MAC_HOST }}
+          username: ${{ secrets.MAC_USER }}
+          key: ${{ secrets.MAC_SSH_KEY }}
+          envs: GH_SHA,GH_REPO,GHCR_USERNAME,GHCR_TOKEN
+          script: |
+            set -eu
+            mkdir -p /opt/wevlo/deploy
+            mv /opt/wevlo/docker-compose.api.yml /opt/wevlo/deploy/docker-compose.api.yml
+            cd /opt/wevlo/deploy
+
+            if [ ! -f .env.production ]; then
+              echo "Missing /opt/wevlo/deploy/.env.production on Mac mini"
+              exit 1
+            fi
+
+            if grep -q '^IMAGE_TAG=' .env.production; then
+              sed -i.bak "s/^IMAGE_TAG=.*/IMAGE_TAG=${GH_SHA}/" .env.production
+            else
+              echo "IMAGE_TAG=${GH_SHA}" >> .env.production
+            fi
+
+            if grep -q '^GHCR_REPOSITORY=' .env.production; then
+              sed -i.bak "s#^GHCR_REPOSITORY=.*#GHCR_REPOSITORY=${GH_REPO}#" .env.production
+            else
+              echo "GHCR_REPOSITORY=${GH_REPO}" >> .env.production
+            fi
+
+            docker login ghcr.io -u "${GHCR_USERNAME}" -p "${GHCR_TOKEN}"
+            docker compose --env-file .env.production -f docker-compose.api.yml pull api
+            docker compose --env-file .env.production -f docker-compose.api.yml up -d api
+            docker image prune -f

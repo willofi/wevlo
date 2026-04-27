@@ -21,6 +21,11 @@ export const userIdentitySchema = z.object({
 export const userSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
+  handle: z
+    .string()
+    .min(3)
+    .max(32)
+    .regex(/^[a-z0-9_]+$/),
   email: z.string().email().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),

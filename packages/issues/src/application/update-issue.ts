@@ -8,7 +8,7 @@ export type UpdateIssueInput = {
   actor: IssueMutator;
   issueKey: string;
   projectId: string;
-  changes: Pick<IssuePatch, "assigneeUserId" | "description" | "priority" | "reporterUserId" | "title">;
+  changes: Pick<IssuePatch, "assigneeUserId" | "description" | "descriptionMentions" | "dueDate" | "labels" | "priority" | "reporterUserId" | "title">;
 };
 
 export const updateIssueUseCase = async (

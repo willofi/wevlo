@@ -1,24 +1,40 @@
 import { AppShell } from "@/components/app-shell";
 import { NotificationsPageClient } from "@/components/notifications-page-client";
 import { getAppShellData } from "@/lib/app-shell-data";
-import { getPlaceholderNotifications } from "@/lib/notifications";
+import { listWorkspaces } from "@/lib/server-api";
 
-export default async function NotificationsPage() {
-  const { viewer, workspaces } = await getAppShellData();
-  const items = getPlaceholderNotifications({ workspaces });
+type NotificationsPageProps = {
+  searchParams: Promise<{
+    project?: string;
+    status?: "all" | "archived" | "unread";
+    workspace?: string;
+  }>;
+};
+
+export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
+  const [params, { viewer, workspaces: shellWorkspaces }, workspaces] = await Promise.all([
+    searchParams,
+    getAppShellData(),
+    listWorkspaces()
+  ]);
 
   return (
     <AppShell
       viewer={viewer}
-      workspaces={workspaces}
-      title="Notifications"
-      subtitle="A compact activity center for mentions, comments, and assignment changes. These items are placeholders until backend delivery is connected."
+      workspaces={shellWorkspaces}
+      title="Inbox"
+      subtitle="All of your notifications in one place, with direct links back to the exact issue context."
       breadcrumbs={[
         { label: "Home", href: "/" },
-        { label: "Notifications" }
+        { label: "Inbox" }
       ]}
     >
-      <NotificationsPageClient items={items} />
+      <NotificationsPageClient
+        {...(params.project ? { initialProjectId: params.project } : {})}
+        {...(params.status ? { initialStatus: params.status } : {})}
+        {...(params.workspace ? { initialWorkspaceId: params.workspace } : {})}
+        workspaces={workspaces}
+      />
     </AppShell>
   );
 }

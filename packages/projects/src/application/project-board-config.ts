@@ -1,20 +1,22 @@
 import type {
   IssueState,
   ProjectBoardAccent,
+  ProjectBoardIconKey,
   ProjectBoardColumnConfigDto,
   ProjectBoardConfigDto
 } from "@wevlo/contracts";
 
 const defaultBoardColumns: Array<{
   accent: ProjectBoardAccent;
+  iconKey: ProjectBoardIconKey;
   label: string;
   state: IssueState;
 }> = [
-  { state: "backlog", label: "Backlog", accent: "slate" },
-  { state: "todo", label: "Todo", accent: "blue" },
-  { state: "in_progress", label: "In progress", accent: "amber" },
-  { state: "done", label: "Done", accent: "teal" },
-  { state: "canceled", label: "Canceled", accent: "rose" }
+  { state: "backlog", label: "Backlog", accent: "slate", iconKey: "circle_dashed" },
+  { state: "todo", label: "Todo", accent: "blue", iconKey: "list_todo" },
+  { state: "in_progress", label: "In progress", accent: "amber", iconKey: "loader_circle" },
+  { state: "done", label: "Done", accent: "teal", iconKey: "check_circle_2" },
+  { state: "canceled", label: "Canceled", accent: "rose", iconKey: "ban" }
 ];
 
 export type ProjectBoardConfigRepository = {
@@ -35,6 +37,7 @@ export const resolveProjectBoardColumns = (
         state: column.state,
         label: override?.label?.trim().length ? override.label.trim() : column.label,
         accent: override?.accent ?? column.accent,
+        iconKey: override?.iconKey ?? column.iconKey,
         order: override?.order ?? index
       };
     })

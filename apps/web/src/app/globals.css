@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 @source "../../../../packages/ui-web/src";
 
@@ -23,6 +24,11 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -49,6 +55,11 @@
   --border: 223 18% 18%;
   --input: 223 18% 18%;
   --ring: 221 83% 56%;
+  --sidebar: 222 24% 7%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-border: 223 18% 18%;
+  --sidebar-accent: 223 18% 11%;
+  --sidebar-accent-foreground: 210 40% 98%;
   --radius: 0.75rem;
   --app-density-gap: 0.75rem;
   --app-page-padding: 1rem;
@@ -74,6 +85,11 @@
   --border: 214 26% 88%;
   --input: 214 26% 88%;
   --ring: 221 83% 56%;
+  --sidebar: 220 24% 96%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border: 214 26% 88%;
+  --sidebar-accent: 220 20% 92%;
+  --sidebar-accent-foreground: 222 47% 11%;
   --radius: 0.75rem;
 }
 
@@ -116,5 +132,116 @@ html {
 
   a {
     @apply transition-colors;
+  }
+
+  .prose {
+    @apply max-w-none;
+    --tw-prose-body: hsl(var(--foreground) / 0.8);
+    --tw-prose-headings: hsl(var(--foreground));
+    --tw-prose-lead: hsl(var(--foreground) / 0.7);
+    --tw-prose-links: hsl(var(--primary));
+    --tw-prose-bold: hsl(var(--foreground));
+    --tw-prose-counters: hsl(var(--muted-foreground));
+    --tw-prose-bullets: hsl(var(--muted-foreground) / 0.5);
+    --tw-prose-hr: hsl(var(--border));
+    --tw-prose-quotes: hsl(var(--foreground));
+    --tw-prose-quote-borders: hsl(var(--primary) / 0.3);
+    --tw-prose-captions: hsl(var(--muted-foreground));
+    --tw-prose-code: hsl(var(--foreground));
+    --tw-prose-pre-code: hsl(var(--foreground));
+    --tw-prose-pre-bg: hsl(var(--secondary) / 0.5);
+    --tw-prose-th-borders: hsl(var(--border));
+    --tw-prose-td-borders: hsl(var(--border) / 0.5);
+  }
+
+  :root[data-theme="light"] .prose {
+    --tw-prose-pre-code: hsl(222 47% 11%);
+    --tw-prose-pre-bg: hsl(220 18% 94%);
+  }
+
+  html[data-theme="light"] .prose pre,
+  html[data-theme="light"] .prose.ProseMirror pre,
+  html[data-theme="light"] .markdown-surface.prose pre,
+  html[data-theme="light"] .markdown-surface.prose.ProseMirror pre {
+    background-color: hsl(220 18% 94%) !important;
+    border-color: hsl(var(--border)) !important;
+    color: hsl(222 47% 11%) !important;
+  }
+
+  html[data-theme="light"] .prose pre code,
+  html[data-theme="light"] .prose.ProseMirror pre code,
+  html[data-theme="light"] .markdown-surface.prose pre code,
+  html[data-theme="light"] .markdown-surface.prose.ProseMirror pre code {
+    background-color: transparent !important;
+    color: hsl(222 47% 11%) !important;
+  }
+
+  .prose h1 {
+    @apply mb-4 mt-6 text-2xl font-bold;
+  }
+
+  .prose h2 {
+    @apply mb-3 mt-5 text-xl font-bold;
+  }
+
+  .prose h3 {
+    @apply mb-2 mt-4 text-lg font-bold;
+  }
+
+  .prose p {
+    margin-bottom: 0.5rem !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .prose.ProseMirror p,
+  .prose :where(p):not(:where([class~="not-prose"], [class~="not-prose"] *)),
+  .markdown-surface.prose p,
+  .markdown-surface.prose.ProseMirror p {
+    margin-bottom: 0.5rem !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .prose code {
+    @apply rounded bg-secondary/50 px-1 py-0.5 font-mono text-[0.9em] font-medium;
+  }
+
+  .prose code::before,
+  .prose code::after {
+    content: "" !important;
+  }
+
+  .prose pre {
+    @apply my-4 overflow-x-auto rounded-xl border border-border/50 p-4;
+    background-color: var(--tw-prose-pre-bg);
+    color: var(--tw-prose-pre-code);
+  }
+
+  .prose pre code {
+    @apply bg-transparent p-0 text-sm;
+    color: inherit;
+  }
+
+  .markdown-surface.prose a {
+    @apply rounded-sm font-medium text-primary underline-offset-2 hover:underline;
+  }
+
+  .prose blockquote {
+    @apply border-l-4 border-primary/30 pl-4 italic;
+  }
+
+  .prose ul, .prose ol {
+    @apply my-4 ml-6 list-outside;
+  }
+
+  .prose ul {
+    @apply list-disc;
+  }
+
+  .prose ol {
+    @apply list-decimal;
+  }
+
+  .prose li {
+    @apply my-1;
   }
 }

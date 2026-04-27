@@ -1,5 +1,4 @@
-import { getCurrentAuthSession } from "@/lib/auth-server";
-import { listWorkspaces } from "@/lib/server-api";
+import { getMe, listWorkspaces } from "@/lib/server-api";
 
 export type AppShellData = {
   viewer: {
@@ -21,15 +20,15 @@ const defaultShellData: AppShellData = {
 };
 
 export const getAppShellData = async (): Promise<AppShellData> => {
-  const [session, workspaces] = await Promise.all([
-    getCurrentAuthSession(),
+  const [me, workspaces] = await Promise.all([
+    getMe(),
     listWorkspaces()
   ]);
 
   return {
     viewer: {
-      email: session?.userEmail ?? null,
-      name: session?.userName ?? "Unknown user"
+      email: me.user.email,
+      name: me.user.name
     },
     workspaces: workspaces.map((workspace) => ({
       name: workspace.name,

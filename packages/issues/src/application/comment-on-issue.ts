@@ -9,6 +9,8 @@ export type CommentOnIssueInput = {
   authorUserId: string;
   body: string;
   issueKey: string;
+  mentions?: IssueCommentDto["mentions"];
+  parentCommentId?: string | null;
   projectId: string;
 };
 
@@ -25,7 +27,9 @@ export const commentOnIssueUseCase = async (
   const comment: IssueCommentDto = createIssueComment({
     authorUserId: input.authorUserId,
     body: input.body,
-    issueId: issue.id as IssueId
+    issueId: issue.id as IssueId,
+    parentCommentId: input.parentCommentId ?? null,
+    ...(input.mentions ? { mentions: input.mentions } : {})
   });
 
   const updated = {

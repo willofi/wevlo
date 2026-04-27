@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import type { ProjectSummaryDto, WorkspaceSummaryDto } from "@wevlo/contracts";
+import type { ProjectSummaryDto, WorkspaceMemberDto, WorkspaceSummaryDto } from "@wevlo/contracts";
 import { Badge, Button } from "@wevlo/ui-web";
 
 import { CreateProjectDialog } from "@/components/create-project-dialog";
@@ -18,6 +18,7 @@ type WorkspaceProjectsSurfaceProps = {
     name: string;
   };
   workspace: WorkspaceSummaryDto;
+  workspaceMembers: WorkspaceMemberDto[];
   workspaces: WorkspaceSummaryDto[];
 };
 
@@ -25,6 +26,7 @@ export function WorkspaceProjectsSurface({
   projects,
   viewer,
   workspace,
+  workspaceMembers,
   workspaces
 }: WorkspaceProjectsSurfaceProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -35,6 +37,11 @@ export function WorkspaceProjectsSurface({
         currentWorkspaceSlug={workspace.slug}
         projects={projects}
         viewer={viewer}
+        workspaceActionsContext={{
+          projects,
+          workspaceMembers,
+          workspaceSlug: workspace.slug
+        }}
         workspaces={workspaces.map((candidate) => ({ name: candidate.name, slug: candidate.slug }))}
         header={(
           <div className="flex items-center justify-between gap-4">

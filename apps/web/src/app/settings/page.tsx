@@ -1,22 +1,30 @@
-import { AppShell } from "@/components/app-shell";
 import { SettingsPageClient } from "@/components/settings-page-client";
-import { getAppShellData } from "@/lib/app-shell-data";
+import { requireCurrentAuthSession } from "@/lib/auth-server";
+import { getMe } from "@/lib/server-api";
 
-export default async function SettingsPage() {
-  const { viewer, workspaces } = await getAppShellData();
+type SettingsPageProps = {
+  searchParams: Promise<{
+    section?: string;
+  }>;
+};
+
+const resolveSection = (value: string | undefined): "preferences" | "profile" =>
+  value === "preferences" ? "preferences" : "profile";
+
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
+  const [authSession, me, resolvedSearchParams] = await Promise.all([
+    requireCurrentAuthSession("/settings"),
+    getMe(),
+    searchParams
+  ]);
+
+  const backHref = authSession.defaultWorkspaceSlug ? `/${authSession.defaultWorkspaceSlug}` : "/";
 
   return (
-    <AppShell
-      viewer={viewer}
-      workspaces={workspaces}
-      title="Settings"
-      subtitle="Personalize how WEVLO looks and where it lands before you dive back into work."
-      breadcrumbs={[
-        { label: "Home", href: "/" },
-        { label: "Settings" }
-      ]}
-    >
-      <SettingsPageClient />
-    </AppShell>
+    <SettingsPageClient
+      backHref={backHref}
+      initialSection={resolveSection(resolvedSearchParams.section)}
+      user={me.user}
+    />
   );
 }

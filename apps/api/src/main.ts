@@ -1,17 +1,17 @@
-import { createDatabase, destroyDatabase, runMigrations, validateApiRuntimeEnv } from "@wevlo/data-access";
+import { createDatabase, destroyDatabase, validateApiRuntimeEnv } from "@wevlo/data-access";
 
 import { buildApi } from "./app";
 
 const start = async () => {
   validateApiRuntimeEnv();
   const database = createDatabase();
-  await runMigrations(database);
   const app = buildApi({
     database
   });
+  const port = Number.parseInt(process.env.PORT ?? "4000", 10);
   await app.listen({
     host: "0.0.0.0",
-    port: 4000
+    port: Number.isFinite(port) ? port : 4000
   });
 
   const shutdown = async () => {

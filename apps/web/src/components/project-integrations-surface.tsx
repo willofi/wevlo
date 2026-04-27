@@ -10,7 +10,8 @@ import type {
   IntegrationProjectLinkDto,
   ProjectSummaryDto,
   SyncStatusDto,
-  WorkspaceDto
+  WorkspaceDto,
+  WorkspaceMemberDto
 } from "@wevlo/contracts";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Textarea } from "@wevlo/ui-web";
 
@@ -40,6 +41,7 @@ type ProjectIntegrationsSurfaceProps = {
     slug: string;
   }>;
   workspace: WorkspaceDto;
+  workspaceMembers: WorkspaceMemberDto[];
 };
 
 const selectClassName =
@@ -53,7 +55,8 @@ export function ProjectIntegrationsSurface({
   projects,
   shellViewer,
   shellWorkspaces,
-  workspace
+  workspace,
+  workspaceMembers
 }: ProjectIntegrationsSurfaceProps) {
   const [installations, setInstallations] = useState(initialInstallations);
   const [links, setLinks] = useState(initialLinks);
@@ -164,6 +167,12 @@ export function ProjectIntegrationsSurface({
         { label: project.key, href: getProjectHref(workspace.slug, project.key) },
         { label: "Integrations" }
       ]}
+      workspaceActionsContext={{
+        currentProjectKey: project.key,
+        projects,
+        workspaceMembers,
+        workspaceSlug: workspace.slug
+      }}
       sidebar={<ProjectSidebarNav mode="integrations" project={project} projects={projects} workspace={workspace} />}
     >
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -339,7 +348,7 @@ export function ProjectIntegrationsSurface({
               {importSummary ? <div className="text-sm text-muted-foreground">{importSummary}</div> : null}
             </CardContent>
           </Card>
-          {error ? <div className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-200">{error}</div> : null}
+          {error ? <div className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
         </div>
 
         <div className="grid gap-6">

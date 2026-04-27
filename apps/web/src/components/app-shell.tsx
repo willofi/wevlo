@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { ListTodo, Menu, Search, Settings2, SquareDashedMousePointer } from "lucide-react";
-import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from "react-icons/hi2";
+import { ListTodo, Menu, Search, SquareDashedMousePointer } from "lucide-react";
+import { HiOutlineChevronDoubleRight } from "react-icons/hi2";
 import { Fragment, useMemo, useState, type PropsWithChildren, type ReactNode } from "react";
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, Button, cn } from "@wevlo/ui-web";
 
+import { AccountMenu } from "@/components/account-menu";
 import { useAppPreferences } from "@/components/app-preferences-provider";
+import { GlobalWorkspaceActions, type WorkspaceActionsContext } from "@/components/global-workspace-actions";
+import { NotificationSummaryProvider } from "@/components/notification-summary-provider";
 import { NotificationsMenu } from "@/components/notifications-menu";
+import { PersonalNav } from "@/components/personal-nav";
 import { UserMenu } from "@/components/user-menu";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
-import { getPlaceholderNotifications } from "@/lib/notifications";
+import { getMyIssuesHref } from "@/lib/issue-hub-data";
 
 type AppShellWorkspace = {
   name: string;
@@ -38,6 +42,7 @@ type AppShellProps = PropsWithChildren<{
   tabs?: ReactNode;
   title: string;
   viewer: AppShellViewer;
+  workspaceActionsContext?: WorkspaceActionsContext;
   workspaces: AppShellWorkspace[];
 }>;
 
@@ -76,7 +81,7 @@ function SidebarIconButton({
   onClick?: () => void;
 }) {
   const className =
-    "flex h-9 items-center justify-center rounded-sm border border-border/70 bg-background/40 text-foreground transition-colors hover:bg-secondary/70";
+    "flex h-9 items-center justify-center rounded-xl bg-sidebar-foreground/6 text-sidebar-foreground transition-colors hover:bg-sidebar-foreground/10";
 
   if (href) {
     return (
@@ -104,22 +109,15 @@ export function AppShell({
   tabs,
   title,
   viewer,
+  workspaceActionsContext,
   workspaces
 }: AppShellProps) {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const { preferences, setPreference } = useAppPreferences();
   const isCompact = preferences.density === "compact";
-  const headerMyIssuesHref = currentWorkspaceSlug
-    ? `/${currentWorkspaceSlug}/my-issues`
-    : workspaces[0]?.slug
-      ? `/${workspaces[0].slug}/my-issues`
-      : "/";
-  const notifications = getPlaceholderNotifications({
-    workspaces,
-    ...(currentWorkspaceSlug ? { currentWorkspaceSlug } : {})
-  });
+  const headerMyIssuesHref = getMyIssuesHref();
   const homePanel = currentWorkspaceSlug ? (
-    <Link href="/" className="block rounded-sm border border-border/70 bg-background/35 px-2.5 py-2 transition-colors hover:bg-secondary/60">
+    <Link href="/" className="block rounded-2xl bg-sidebar-foreground/[0.035] px-3 py-2.5 transition-colors hover:bg-sidebar-foreground/[0.06]">
       <div className="text-[10px] font-medium uppercase tracking-[0.35em] text-muted-foreground">WEVLO</div>
       <div className="mt-1 text-[13px] font-semibold text-foreground">All workspaces</div>
       <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
@@ -127,7 +125,7 @@ export function AppShell({
       </p>
     </Link>
   ) : (
-    <div className="rounded-sm border border-border/70 bg-background/35 px-2.5 py-2">
+    <div className="rounded-2xl bg-sidebar-foreground/[0.035] px-3 py-2.5">
       <div className="text-[10px] font-medium uppercase tracking-[0.35em] text-muted-foreground">WEVLO</div>
       <div className="mt-1 text-[13px] font-semibold text-foreground">Workspace home</div>
     </div>
@@ -140,7 +138,8 @@ export function AppShell({
           workspaces={workspaces}
           {...(currentWorkspaceSlug ? { currentWorkspaceSlug } : {})}
         />
-        {sidebar ? <div className="space-y-6">{sidebar}</div> : null}
+        <PersonalNav />
+        {sidebar ? <div className="space-y-5">{sidebar}</div> : null}
       </>
     ),
     [currentWorkspaceSlug, homePanel, sidebar, workspaces]
@@ -150,46 +149,39 @@ export function AppShell({
     () =>
       preferences.sidebarCollapsed ? (
         <div className="grid gap-2">
-          <SidebarIconButton href="/settings" label="Settings">
-            <Settings2 className="size-4" />
-          </SidebarIconButton>
+          <AccountMenu align="start" email={viewer.email} name={viewer.name} side="right" trigger="collapsed" />
           <SidebarIconButton label="Expand sidebar" onClick={() => setPreference("sidebarCollapsed", false)}>
             <HiOutlineChevronDoubleRight className="size-4" />
           </SidebarIconButton>
         </div>
       ) : (
         <div className="space-y-1.5">
-          <Link
-            href="/settings"
-            className="inline-flex h-8 w-full items-center gap-2 rounded-sm border border-border/70 bg-background/40 px-2.5 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-secondary/70"
-          >
-            <Settings2 className="size-4" />
-            Settings
-          </Link>
+          <AccountMenu align="start" email={viewer.email} name={viewer.name} side="top" trigger="sidebar" />
           <button
             type="button"
             onClick={() => setPreference("sidebarCollapsed", !preferences.sidebarCollapsed)}
-            className="inline-flex h-8 w-full items-center gap-2 rounded-sm border border-border/70 bg-background/40 px-2.5 py-1.5 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-secondary/70"
+            className="inline-flex h-8 w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground"
           >
-            {preferences.sidebarCollapsed ? <HiOutlineChevronDoubleRight className="size-4" /> : <HiOutlineChevronDoubleLeft className="size-4" />}
-            {preferences.sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            <HiOutlineChevronDoubleRight className="size-4 rotate-180" />
+            Collapse sidebar
           </button>
         </div>
       ),
-    [preferences.sidebarCollapsed, setPreference]
+    [preferences.sidebarCollapsed, setPreference, viewer.email, viewer.name]
   );
 
   return (
-    <div className="h-screen overflow-hidden bg-background text-foreground">
-      <div
-        className={cn(
-          "h-screen lg:grid",
-          preferences.sidebarCollapsed ? "lg:grid-cols-[72px_minmax(0,1fr)]" : "lg:grid-cols-[224px_minmax(0,1fr)]"
-        )}
-      >
+    <NotificationSummaryProvider>
+      <div className="h-screen overflow-hidden bg-background text-foreground">
+        <div
+          className={cn(
+            "h-screen lg:grid",
+            preferences.sidebarCollapsed ? "lg:grid-cols-[72px_minmax(0,1fr)]" : "lg:grid-cols-[224px_minmax(0,1fr)]"
+          )}
+        >
         <aside
           className={cn(
-            "hidden h-screen border-r border-border/70 bg-background/80 px-2.5 py-2.5 text-[13px] backdrop-blur lg:flex lg:flex-col",
+            "hidden h-screen bg-sidebar px-2.5 py-2.5 text-[13px] text-sidebar-foreground backdrop-blur lg:flex lg:flex-col",
             preferences.sidebarCollapsed && "lg:px-2"
           )}
         >
@@ -202,12 +194,12 @@ export function AppShell({
                   </SidebarIconButton>
                 </div>
               ) : (
-                <div className="grid gap-2.5 pr-0.5 pb-2">
+                <div className="grid gap-2 pr-0.5 pb-2">
                   {sidebarNavContent}
                 </div>
               )}
             </div>
-            <div className="shrink-0 border-t border-border/70 pt-2">
+            <div className="shrink-0 pt-2">
               {sidebarFooterContent}
             </div>
           </div>
@@ -230,17 +222,21 @@ export function AppShell({
               <div className="min-w-0 flex-1">
                 {breadcrumbs && breadcrumbs.length > 0 ? <Breadcrumbs items={breadcrumbs} /> : null}
               </div>
-              <Button variant="outline" className="hidden items-center gap-2 md:inline-flex" size="sm" disabled>
-                <Search className="size-4" />
-                Search soon
-              </Button>
+              {currentWorkspaceSlug && workspaceActionsContext ? (
+                <GlobalWorkspaceActions {...workspaceActionsContext} variant="header" />
+              ) : (
+                <Button variant="outline" className="hidden items-center gap-2 md:inline-flex" size="sm" disabled>
+                  <Search className="size-4" />
+                  Search soon
+                </Button>
+              )}
               <Button asChild variant="outline" size="icon" className="hidden rounded-full md:inline-flex" title="My issues" aria-label="My issues">
                 <Link href={headerMyIssuesHref}>
                   <ListTodo className="size-4" />
                 </Link>
               </Button>
-              <NotificationsMenu items={notifications} />
-              {newIssueHref ? (
+              <NotificationsMenu />
+              {newIssueHref && !(currentWorkspaceSlug && workspaceActionsContext) ? (
                 <Button asChild className="items-center gap-2" size="sm">
                   <Link href={newIssueHref}>
                     <SquareDashedMousePointer className="size-4" />
@@ -275,7 +271,8 @@ export function AppShell({
             {children}
           </main>
         </div>
+        </div>
       </div>
-    </div>
+    </NotificationSummaryProvider>
   );
 }

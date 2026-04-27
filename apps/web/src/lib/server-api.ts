@@ -2,6 +2,8 @@ import type {
   IntegrationInstallationDto,
   IntegrationProjectLinkDto,
   IssueDetailDto,
+  WorkspaceSearchQuery,
+  WorkspaceSearchResponseDto,
   MeDto,
   ProjectBoardConfigDto,
   ProjectBoardViewDto,
@@ -14,9 +16,9 @@ import type {
   WorkspaceDto,
   WorkspaceSummaryDto
 } from "@wevlo/contracts";
-import { buildInternalAuthHeaders } from "@wevlo/auth";
 
 import { requireCurrentAuthSession } from "@/lib/auth-server";
+import { buildApiInternalAuthHeaders } from "@/lib/internal-auth-headers";
 import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/runtime-env";
 
 const apiBaseUrl = getWebApiBaseUrl();
@@ -36,7 +38,7 @@ const requestJson = async <TResponse>(
     cache: "no-store",
     headers: {
       "content-type": "application/json",
-      ...buildInternalAuthHeaders(
+      ...buildApiInternalAuthHeaders(
         {
           provider: session.provider,
           providerUserId: session.providerUserId,
@@ -283,6 +285,31 @@ export const getTriageQueue = async (
 export const getWorkspaceMembers = async (workspaceSlug: string): Promise<WorkspaceMemberDto[]> => {
   const members = await requestJson<WorkspaceMemberDto[]>(`/workspaces/${workspaceSlug}/members`);
   return members ?? [];
+};
+
+export const searchWorkspace = async (
+  workspaceSlug: string,
+  query: Partial<WorkspaceSearchQuery>
+): Promise<WorkspaceSearchResponseDto> => {
+  const searchParams = new URLSearchParams();
+
+  if (query.q !== undefined) {
+    searchParams.set("q", query.q);
+  }
+
+  if (query.scope) {
+    searchParams.set("scope", query.scope);
+  }
+
+  const response = await requestJson<WorkspaceSearchResponseDto>(
+    `/workspaces/${workspaceSlug}/search?${searchParams.toString()}`
+  );
+
+  return response ?? {
+    documents: [],
+    issues: [],
+    projects: []
+  };
 };
 
 export const getWorkspaceInvitations = async (workspaceSlug: string): Promise<WorkspaceInvitationDto[]> => {

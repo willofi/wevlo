@@ -18,9 +18,14 @@ const makeRepository = () => {
   const numbers = new Map<string, number>();
 
   return {
+    addReaction: vi.fn(),
+    createAttachment: vi.fn(),
+    createLabel: vi.fn(),
+    deleteAttachment: vi.fn(),
     findByKey: vi.fn(async (projectId: string, issueKey: string) => {
       return issues.get(`${projectId}:${issueKey}`) ?? null;
     }),
+    findAttachment: vi.fn(),
     findBySourceLink: vi.fn(async (input: {
       projectId: string;
       provider: string;
@@ -43,11 +48,13 @@ const makeRepository = () => {
     listByProject: vi.fn(async (projectId: string) => {
       return [...issues.values()].filter((issue) => issue.projectId === projectId);
     }),
+    listLabels: vi.fn(async () => []),
     nextIssueNumber: vi.fn(async (projectId: string) => {
       const next = (numbers.get(projectId) ?? 0) + 1;
       numbers.set(projectId, next);
       return next;
     }),
+    removeReaction: vi.fn(),
     save: vi.fn(async (issue: ReturnType<typeof createIssue>) => {
       issues.set(`${issue.projectId}:${issue.issueKey}`, issue);
     }),
@@ -78,6 +85,81 @@ describe("issue application use cases", () => {
     });
 
     expect(detail?.issueKey).toBe("PLAT-1");
+  });
+
+  it("creates and updates issue metadata for labels and due dates", async () => {
+    const repository = makeRepository();
+    const labels = [
+      {
+        id: "label_bug",
+        projectId: "project_1",
+        name: "Bug",
+        color: "red",
+        createdAt: "2026-04-25T00:00:00.000Z",
+        updatedAt: "2026-04-25T00:00:00.000Z"
+      },
+      {
+        id: "label_feature",
+        projectId: "project_1",
+        name: "Feature",
+        color: "violet",
+        createdAt: "2026-04-25T00:00:00.000Z",
+        updatedAt: "2026-04-25T00:00:00.000Z"
+      }
+    ];
+
+    const issue = await createIssueUseCase(repository, {
+      assigneeUserId: "user_2",
+      dueDate: "2026-05-01",
+      labels: [labels[0]!],
+      priority: "high",
+      projectId: "project_1" as ProjectId,
+      projectKey: "plat",
+      reporterUserId: "user_1",
+      state: "todo",
+      title: "Track richer metadata"
+    });
+
+    expect(issue.assigneeUserId).toBe("user_2");
+    expect(issue.dueDate).toBe("2026-05-01");
+    expect(issue.labels.map((label) => label.id)).toEqual(["label_bug"]);
+    expect(issue.priority).toBe("high");
+    expect(issue.state).toBe("todo");
+
+    const updated = await updateIssueUseCase(repository, {
+      actor: "local",
+      changes: {
+        dueDate: null,
+        labels: [labels[1]!]
+      },
+      issueKey: issue.issueKey,
+      projectId: issue.projectId
+    });
+
+    expect(updated.dueDate).toBeNull();
+    expect(updated.labels.map((label) => label.id)).toEqual(["label_feature"]);
+  });
+
+  it("creates a sub-issue linked to its parent issue", async () => {
+    const repository = makeRepository();
+    const parent = await createIssueUseCase(repository, {
+      projectId: "project_1" as ProjectId,
+      projectKey: "plat",
+      reporterUserId: "user_1",
+      title: "Parent issue"
+    });
+
+    const child = await createIssueUseCase(repository, {
+      parentIssueId: parent.id,
+      projectId: "project_1" as ProjectId,
+      projectKey: "plat",
+      reporterUserId: "user_1",
+      title: "Child issue"
+    });
+
+    expect(child.parentIssueId).toBe(parent.id);
+    expect(child.parent).toBeNull();
+    expect(child.subIssues).toEqual([]);
   });
 
   it("lists issues and groups them on the board by state", async () => {
@@ -137,11 +219,11 @@ describe("issue application use cases", () => {
     const board = resolveProjectBoardViewUseCase(await repository.listByProject("project_1"), {
       projectId: "project_1",
       columns: [
-        { state: "todo", label: "Queued", order: 0, accent: "blue" },
-        { state: "backlog", label: "Backlog", order: 1, accent: "slate" },
-        { state: "in_progress", label: "In progress", order: 2, accent: "amber" },
-        { state: "done", label: "Done", order: 3, accent: "teal" },
-        { state: "canceled", label: "Canceled", order: 4, accent: "rose" }
+        { state: "todo", label: "Queued", order: 0, accent: "blue", iconKey: "list_todo" },
+        { state: "backlog", label: "Backlog", order: 1, accent: "slate", iconKey: "circle_dashed" },
+        { state: "in_progress", label: "In progress", order: 2, accent: "amber", iconKey: "loader_circle" },
+        { state: "done", label: "Done", order: 3, accent: "teal", iconKey: "check_circle_2" },
+        { state: "canceled", label: "Canceled", order: 4, accent: "rose", iconKey: "ban" }
       ]
     });
 

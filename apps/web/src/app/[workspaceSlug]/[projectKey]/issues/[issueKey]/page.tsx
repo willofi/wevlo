@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { IssueDetailPageSurface } from "@/components/issue-detail-page-surface";
 import { requireCurrentAuthSession } from "@/lib/auth-server";
 import { loadProjectShellPageData } from "@/lib/project-shell-page";
-import { getIssueByKey, getWorkspaceMembers, listWorkspaces } from "@/lib/server-api";
+import { getIssueByKey, getMe, getWorkspaceMembers, listWorkspaces } from "@/lib/server-api";
 
 type IssueDetailPageProps = {
   params: Promise<{
@@ -31,8 +31,9 @@ export default async function IssueDetailPage({ params }: IssueDetailPageProps) 
   }
 
   const { project, projects, workspace } = result.data;
-  const [authSession, issue, workspaceMembers, workspaces] = await Promise.all([
+  const [, me, issue, workspaceMembers, workspaces] = await Promise.all([
     requireCurrentAuthSession(`/${workspace.slug}/${project.key}/issues/${issueKey}`),
+    getMe(),
     getIssueByKey(workspace.slug, project.key, issueKey),
     getWorkspaceMembers(workspace.slug),
     listWorkspaces()
@@ -48,8 +49,9 @@ export default async function IssueDetailPage({ params }: IssueDetailPageProps) 
       project={project}
       projects={projects}
       viewer={{
-        email: authSession.userEmail ?? null,
-        name: authSession.userName ?? "Workspace member"
+        email: me.user.email ?? null,
+        id: me.user.id,
+        name: me.user.name
       }}
       workspace={workspace}
       workspaceMembers={workspaceMembers}

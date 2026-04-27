@@ -3,14 +3,29 @@ import type {
   CreateIntegrationInstallationRequest,
   CreateIntegrationProjectLinkRequest,
   CreateIssueRequest,
+  CreateIssueLabelRequest,
   CreateProjectRequest,
   CreateWorkspaceRequest,
+  HandleAvailabilityDto,
   ImportIntegrationProjectIssuesRequest,
   IntegrationInstallationDto,
   IntegrationProjectLinkDto,
   IssueDetailDto,
+  IssueAttachmentDto,
+  IssueActivityItemDto,
+  IssueLabelDto,
   IssueListItemDto,
+  IssueSubscriptionStateDto,
+  WorkspaceSearchQuery,
+  WorkspaceSearchResponseDto,
   MeDto,
+  MyIssuesQuery,
+  MyIssuesResponseDto,
+  NotificationIdsRequest,
+  NotificationListQuery,
+  NotificationListResponseDto,
+  NotificationPreferenceDto,
+  NotificationSummaryDto,
   ProjectBoardConfigDto,
   ProjectBoardViewDto,
   ProjectMemberDto,
@@ -18,6 +33,9 @@ import type {
   SessionDto,
   SyncStatusDto,
   TransitionIssueRequest,
+  UpdateIssueReactionRequest,
+  UpdateProfileRequest,
+  UpdateIssueSubscriptionRequest,
   UpdateIssueRequest,
   WorkspaceInvitationDto,
   WorkspaceMemberDto,
@@ -46,13 +64,18 @@ const requestJson = async <TResponse>(
     allowNotFound?: boolean;
   }
 ): Promise<TResponse | null> => {
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string>)
+  };
+
+  if (init?.body && !headers["content-type"]) {
+    headers["content-type"] = "application/json";
+  }
+
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     cache: "no-store",
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {})
-    }
+    headers
   });
 
   if (response.status === 404 && options?.allowNotFound) {
@@ -87,6 +110,121 @@ export const getMe = async (): Promise<MeDto> => {
   return me;
 };
 
+export const getHandleAvailability = async (handle: string): Promise<HandleAvailabilityDto> => {
+  const searchParams = new URLSearchParams({
+    handle
+  });
+  const response = await requestJson<HandleAvailabilityDto>(`/me/handle-availability?${searchParams.toString()}`);
+
+  if (!response) {
+    throw new Error("Handle availability unavailable");
+  }
+
+  return response;
+};
+
+export const updateProfile = async (payload: UpdateProfileRequest): Promise<MeDto["user"]> => {
+  const user = await requestJson<MeDto["user"]>("/me/profile", {
+    body: JSON.stringify(payload),
+    method: "PATCH"
+  });
+
+  if (!user) {
+    throw new Error("Profile update returned no payload");
+  }
+
+  return user;
+};
+
+export const getNotificationSummary = async (): Promise<NotificationSummaryDto> => {
+  const summary = await requestJson<NotificationSummaryDto>("/notifications/summary");
+
+  if (!summary) {
+    return {
+      items: [],
+      unseenCount: 0
+    };
+  }
+
+  return summary;
+};
+
+export const getNotifications = async (query: Partial<NotificationListQuery> = {}): Promise<NotificationListResponseDto> => {
+  const searchParams = new URLSearchParams();
+
+  if (query.category) {
+    searchParams.set("category", query.category);
+  }
+
+  if (query.projectId) {
+    searchParams.set("projectId", query.projectId);
+  }
+
+  if (query.status) {
+    searchParams.set("status", query.status);
+  }
+
+  if (query.workspaceId) {
+    searchParams.set("workspaceId", query.workspaceId);
+  }
+
+  const path = `/notifications${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const response = await requestJson<NotificationListResponseDto>(path);
+
+  return response ?? {
+    items: [],
+    unreadCount: 0,
+    unseenCount: 0
+  };
+};
+
+const postNotificationIds = async (path: string, payload: NotificationIdsRequest): Promise<void> => {
+  await requestJson(path, {
+    body: JSON.stringify(payload),
+    method: "POST"
+  });
+};
+
+export const markNotificationsSeen = async (ids: string[]): Promise<void> => {
+  if (ids.length === 0) {
+    return;
+  }
+
+  await postNotificationIds("/notifications/seen", { ids });
+};
+
+export const markNotificationsRead = async (ids: string[]): Promise<void> => {
+  if (ids.length === 0) {
+    return;
+  }
+
+  await postNotificationIds("/notifications/read", { ids });
+};
+
+export const archiveNotifications = async (ids: string[]): Promise<void> => {
+  if (ids.length === 0) {
+    return;
+  }
+
+  await postNotificationIds("/notifications/archive", { ids });
+};
+
+export const markAllNotificationsRead = async (): Promise<void> => {
+  await requestJson("/notifications/read-all", {
+    method: "POST"
+  });
+};
+
+export const getNotificationPreferences = async (): Promise<NotificationPreferenceDto> => {
+  const preferences = await requestJson<NotificationPreferenceDto>("/notification-preferences");
+
+  if (!preferences) {
+    throw new Error("Notification preferences unavailable");
+  }
+
+  return preferences;
+};
+
 export const listWorkspaces = async (): Promise<WorkspaceSummaryDto[]> => {
   const workspaces = await requestJson<WorkspaceSummaryDto[]>("/workspaces");
   return workspaces ?? [];
@@ -116,6 +254,60 @@ export const getWorkspaceBySlug = async (slug: string): Promise<WorkspaceDto | u
 export const getProjectsForWorkspace = async (workspaceSlug: string): Promise<ProjectSummaryDto[]> => {
   const projects = await requestJson<ProjectSummaryDto[]>(`/workspaces/${workspaceSlug}/projects`);
   return projects ?? [];
+};
+
+export const searchWorkspace = async (
+  workspaceSlug: string,
+  query: Partial<WorkspaceSearchQuery>
+): Promise<WorkspaceSearchResponseDto> => {
+  const searchParams = new URLSearchParams();
+
+  if (query.q !== undefined) {
+    searchParams.set("q", query.q);
+  }
+
+  if (query.scope) {
+    searchParams.set("scope", query.scope);
+  }
+
+  const response = await requestJson<WorkspaceSearchResponseDto>(
+    `/workspaces/${workspaceSlug}/search?${searchParams.toString()}`
+  );
+
+  return response ?? {
+    documents: [],
+    issues: [],
+    projects: []
+  };
+};
+
+export const getMyIssues = async (
+  query: {
+    projectKey?: string;
+    tab?: MyIssuesQuery["tab"];
+    workspaceSlug?: string;
+  } = {}
+): Promise<MyIssuesResponseDto> => {
+  const searchParams = new URLSearchParams();
+
+  if (query.projectKey) {
+    searchParams.set("projectKey", query.projectKey);
+  }
+
+  if (query.tab) {
+    searchParams.set("tab", query.tab);
+  }
+
+  if (query.workspaceSlug) {
+    searchParams.set("workspaceSlug", query.workspaceSlug);
+  }
+
+  const path = `/me/issues${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const response = await requestJson<MyIssuesResponseDto>(path);
+
+  return response ?? {
+    items: []
+  };
 };
 
 export const createProject = async (
@@ -222,6 +414,31 @@ export const createIssue = async (
   }
 
   return issue;
+};
+
+export const listProjectLabels = async (
+  workspaceSlug: string,
+  projectKey: string
+): Promise<IssueLabelDto[]> => {
+  const labels = await requestJson<IssueLabelDto[]>(`/workspaces/${workspaceSlug}/projects/${projectKey}/labels`);
+  return labels ?? [];
+};
+
+export const createProjectLabel = async (
+  workspaceSlug: string,
+  projectKey: string,
+  payload: CreateIssueLabelRequest
+): Promise<IssueLabelDto> => {
+  const label = await requestJson<IssueLabelDto>(`/workspaces/${workspaceSlug}/projects/${projectKey}/labels`, {
+    body: JSON.stringify(payload),
+    method: "POST"
+  });
+
+  if (!label) {
+    throw new Error("Label creation returned no payload");
+  }
+
+  return label;
 };
 
 export const getWorkspaceIntegrations = async (
@@ -333,16 +550,48 @@ export const getIssueByKey = async (
   return issue ?? undefined;
 };
 
+export const getIssueActivity = async (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string
+): Promise<IssueActivityItemDto[]> => {
+  const items = await requestJson<IssueActivityItemDto[]>(
+    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/activity`
+  );
+
+  return items ?? [];
+};
+
+export const getIssueSubscription = async (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string
+): Promise<IssueSubscriptionStateDto> => {
+  const subscription = await requestJson<IssueSubscriptionStateDto>(
+    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/subscription`
+  );
+
+  if (!subscription) {
+    throw new Error("Issue subscription unavailable");
+  }
+
+  return subscription;
+};
+
 export const updateIssue = async (
   workspaceSlug: string,
   projectKey: string,
   issueKey: string,
-  payload: UpdateIssueRequest
+  payload: UpdateIssueRequest,
+  options?: {
+    keepalive?: boolean;
+  }
 ): Promise<IssueDetailDto> => {
   const issue = await requestJson<IssueDetailDto>(
     `/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}`,
     {
       body: JSON.stringify(payload),
+      ...(options?.keepalive ? { keepalive: true } : {}),
       method: "PATCH"
     }
   );
@@ -352,6 +601,51 @@ export const updateIssue = async (
   }
 
   return issue;
+};
+
+export const getIssueAttachmentHref = (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  attachmentId: string
+): string =>
+  `/api/bff/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/attachments/${attachmentId}`;
+
+export const uploadIssueAttachment = async (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  file: File
+): Promise<IssueAttachmentDto> => {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const response = await fetch(
+    `${apiBaseUrl}/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/attachments`,
+    {
+      body: formData,
+      cache: "no-store",
+      method: "POST"
+    }
+  );
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Attachment upload failed: ${response.status} ${message}`);
+  }
+
+  return (await response.json()) as IssueAttachmentDto;
+};
+
+export const deleteIssueAttachment = async (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  attachmentId: string
+): Promise<void> => {
+  await requestJson(`/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/attachments/${attachmentId}`, {
+    method: "DELETE"
+  });
 };
 
 export const transitionIssue = async (
@@ -391,6 +685,70 @@ export const createComment = async (
 
   if (!issue) {
     throw new Error("Comment creation returned no payload");
+  }
+
+  return issue;
+};
+
+export const setIssueSubscription = async (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  payload: UpdateIssueSubscriptionRequest
+): Promise<IssueSubscriptionStateDto> => {
+  const subscription = await requestJson<IssueSubscriptionStateDto>(
+    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/subscription`,
+    {
+      body: JSON.stringify(payload),
+      method: "PUT"
+    }
+  );
+
+  if (!subscription) {
+    throw new Error("Issue subscription update returned no payload");
+  }
+
+  return subscription;
+};
+
+export const setIssueReaction = async (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  payload: UpdateIssueReactionRequest
+): Promise<IssueDetailDto> => {
+  const issue = await requestJson<IssueDetailDto>(
+    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/reactions`,
+    {
+      body: JSON.stringify(payload),
+      method: "PUT"
+    }
+  );
+
+  if (!issue) {
+    throw new Error("Issue reaction update returned no payload");
+  }
+
+  return issue;
+};
+
+export const setCommentReaction = async (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  commentId: string,
+  payload: UpdateIssueReactionRequest
+): Promise<IssueDetailDto> => {
+  const issue = await requestJson<IssueDetailDto>(
+    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/comments/${commentId}/reactions`,
+    {
+      body: JSON.stringify(payload),
+      method: "PUT"
+    }
+  );
+
+  if (!issue) {
+    throw new Error("Comment reaction returned no payload");
   }
 
   return issue;
@@ -678,12 +1036,70 @@ export const getProjectHref = (workspaceSlug: string, projectKey: string, page?:
 export const getIssueHref = (workspaceSlug: string, projectKey: string, issueKey: string): string =>
   `/${workspaceSlug}/${projectKey}/issues/${issueKey}`;
 
+export const getIssueCommentHref = (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  commentId: string
+): string =>
+  `${getIssueHref(workspaceSlug, projectKey, issueKey)}?comment=${encodeURIComponent(commentId)}#comment-${encodeURIComponent(commentId)}`;
+
+export const getIssueDescriptionHref = (
+  workspaceSlug: string,
+  projectKey: string,
+  issueKey: string,
+  options: {
+    endOffset: number;
+    startOffset: number;
+  }
+): string =>
+  `${getIssueHref(workspaceSlug, projectKey, issueKey)}?target=description&start=${options.startOffset}&end=${options.endOffset}#description`;
+
 export const getIssuePanelHref = (workspaceSlug: string, projectKey: string, issueKey: string): string =>
   buildProjectShellHref(workspaceSlug, projectKey, { issueKey });
+
+export const getMyIssuesHref = (options?: {
+  projectKey?: string;
+  workspaceSlug?: string;
+}): string => {
+  const searchParams = new URLSearchParams();
+
+  if (options?.projectKey) {
+    searchParams.set("projectKey", options.projectKey);
+  }
+
+  if (options?.workspaceSlug) {
+    searchParams.set("workspace", options.workspaceSlug);
+  }
+
+  const query = searchParams.toString();
+  return query.length > 0 ? `/my-issues?${query}` : "/my-issues";
+};
+
+export const getInboxHref = (options?: {
+  projectId?: string;
+  workspaceId?: string;
+}): string => {
+  const searchParams = new URLSearchParams();
+
+  if (options?.projectId) {
+    searchParams.set("project", options.projectId);
+  }
+
+  if (options?.workspaceId) {
+    searchParams.set("workspace", options.workspaceId);
+  }
+
+  const query = searchParams.toString();
+  return query.length > 0 ? `/notifications?${query}` : "/notifications";
+};
 
 export const getWorkspaceHref = (workspaceSlug: string): string => `/${workspaceSlug}`;
 
 export const getWorkspaceMembersHref = (workspaceSlug: string): string => `/${workspaceSlug}/members`;
+
+export const getWorkspaceMemberHref = (workspaceSlug: string, userId: string): string =>
+  `/${workspaceSlug}/members/${encodeURIComponent(userId)}`;
 
 export const getWorkspaceAccessHref = (workspaceSlug: string): string => `/${workspaceSlug}/access`;
 

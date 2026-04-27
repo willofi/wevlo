@@ -1,4 +1,4 @@
-import type { ProjectBoardConfigDto } from "@wevlo/contracts";
+import type { ProjectBoardConfigDto, ProjectBoardIconKey } from "@wevlo/contracts";
 import type { Database } from "@wevlo/data-access";
 
 export class PostgresProjectBoardConfigRepository {
@@ -7,7 +7,7 @@ export class PostgresProjectBoardConfigRepository {
   async findByProjectId(projectId: string): Promise<ProjectBoardConfigDto | null> {
     const rows = await this.database
       .selectFrom("project_board_columns")
-      .select(["accent", "column_order", "label", "project_id", "state"])
+      .select(["accent", "column_order", "icon_key", "label", "project_id", "state"])
       .where("project_id", "=", projectId)
       .orderBy("column_order", "asc")
       .execute();
@@ -22,7 +22,8 @@ export class PostgresProjectBoardConfigRepository {
         state: row.state,
         label: row.label,
         order: row.column_order,
-        accent: row.accent
+        accent: row.accent,
+        iconKey: row.icon_key as ProjectBoardIconKey
       }))
     };
   }
@@ -45,6 +46,7 @@ export class PostgresProjectBoardConfigRepository {
             label: column.label,
             column_order: column.order,
             accent: column.accent,
+            icon_key: column.iconKey,
             created_at: now,
             updated_at: now
           }))

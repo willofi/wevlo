@@ -7,6 +7,7 @@ import type { ProjectSummaryDto } from "@wevlo/contracts";
 import { cn } from "@wevlo/ui-web";
 
 import {
+  getMyIssuesHref,
   getProjectAccessHref,
   getProjectHref,
   getProjectIntegrationsHref,
@@ -70,7 +71,7 @@ export function ProjectSidebarNav({
     <>
       <SidebarGroup title="Work">
         <SidebarLink href={getWorkspaceHref(workspace.slug)} label="Workspace overview" />
-        <SidebarLink href={`/${workspace.slug}/my-issues`} label="My issues" />
+        <SidebarLink href={getMyIssuesHref({ workspaceSlug: workspace.slug })} label="My issues" />
         <SidebarLink
           href={getProjectHref(workspace.slug, project.key, "issues")}
           label="Issues"

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CircleDot, LayoutTemplate, MoreHorizontal, PanelTopOpen, Rows3, TriangleAlert } from "lucide-react";
+import { LayoutGrid, LayoutTemplate, MoreHorizontal, PanelTopOpen, Rows3, Tag, TriangleAlert, UserRound } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -46,6 +46,7 @@ import {
 
 import { AppShell } from "@/components/app-shell";
 import { ProjectBoardSettingsEditor, boardAccentClasses } from "@/components/project-board-settings-editor";
+import { getPriorityIcon, labelColorClasses, priorityToneClasses, renderProjectBoardIcon } from "@/lib/issue-presentation";
 import { ProjectSidebarNav } from "@/components/project-sidebar-nav";
 import {
   getProjectHref,
@@ -128,6 +129,7 @@ const extractConfigColumns = (columns: BoardColumn[]): ProjectBoardColumnConfigD
     state: column.state,
     label: column.label,
     accent: column.accent,
+    iconKey: column.iconKey,
     order: index
   }));
 
@@ -245,12 +247,14 @@ function BoardColumnPanel({
   accent,
   children,
   count,
+  iconKey,
   label,
   state
 }: {
   accent: BoardColumn["accent"];
   children: ReactNode;
   count: number;
+  iconKey: BoardColumn["iconKey"];
   label: string;
   state: BoardColumn["state"];
 }) {
@@ -275,6 +279,7 @@ function BoardColumnPanel({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className={cn("size-2 rounded-full", dot)} />
+          <span className="text-muted-foreground">{renderProjectBoardIcon(iconKey, "size-4")}</span>
           <div className="text-sm font-semibold text-foreground">{label}</div>
         </div>
         <span className={cn("rounded-full border px-2 py-1 text-xs font-medium", chip)}>{count}</span>
@@ -287,11 +292,15 @@ function BoardColumnPanel({
 function SortableBoardIssueCard({
   assigneeLabel,
   issue,
+  projectKey,
+  stateIconKey,
   onNavigate,
   onTransition
 }: {
   assigneeLabel: string;
   issue: BoardIssueDto;
+  projectKey: string;
+  stateIconKey: BoardColumn["iconKey"];
   onNavigate: () => void;
   onTransition: (nextState: BoardIssueDto["state"]) => void;
 }) {
@@ -331,51 +340,78 @@ function SortableBoardIssueCard({
           <button
             type="button"
             onClick={onNavigate}
-            className="mt-1.5 text-left text-sm font-semibold leading-5 text-foreground transition-colors hover:text-primary"
+            className="mt-2 flex items-center gap-2 text-left text-sm font-semibold leading-5 text-foreground transition-colors hover:text-primary"
           >
+            <span className="shrink-0 text-muted-foreground">{renderProjectBoardIcon(stateIconKey, "size-4")}</span>
             {issue.title}
           </button>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-secondary/70 hover:text-foreground"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Issue actions</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={onNavigate}>Open issue</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Move to</DropdownMenuLabel>
-            {nextStates[issue.state].length > 0 ? (
-              nextStates[issue.state].map((state) => (
-                <DropdownMenuItem key={state} onSelect={() => onTransition(state)}>
-                  {state.replace("_", " ")}
-                </DropdownMenuItem>
-              ))
+        <div className="flex items-start gap-1.5">
+          <div
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-secondary/35 text-muted-foreground"
+            title={assigneeLabel}
+          >
+            {issue.assigneeUserId ? (
+              <span className="text-[10px] font-semibold text-foreground">{getInitials(assigneeLabel)}</span>
             ) : (
-              <DropdownMenuItem disabled>No further transitions</DropdownMenuItem>
+              <UserRound className="size-3.5" />
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
-        {issue.description.trim().length > 0 ? issue.description : "No description yet."}
-      </p>
-      <div className="mt-3 flex items-center justify-end gap-3">
-        <div
-          className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-secondary/35 px-1.5 py-1"
-          title={assigneeLabel}
-        >
-          <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary/12 text-[10px] font-semibold text-primary">
-            {getInitials(assigneeLabel)}
-          </span>
-          <span className="hidden max-w-[96px] truncate text-[11px] text-muted-foreground sm:inline">{assigneeLabel}</span>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-secondary/70 hover:text-foreground"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Issue actions</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={onNavigate}>Open issue</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Move to</DropdownMenuLabel>
+              {nextStates[issue.state].length > 0 ? (
+                nextStates[issue.state].map((state) => (
+                  <DropdownMenuItem key={state} onSelect={() => onTransition(state)}>
+                    {state.replace("_", " ")}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>No further transitions</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {issue.priority !== "none" ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[11px] font-medium",
+              priorityToneClasses[issue.priority]
+            )}
+          >
+            {getPriorityIcon(issue.priority)}
+          </span>
+        ) : null}
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground">
+          <Tag className="size-3" />
+          {projectKey}
+        </span>
+        {issue.labels.slice(0, 1).map((label) => (
+          <span
+            key={label.id}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground"
+          >
+            <span className={cn("size-2 rounded-full", labelColorClasses[label.color] ?? "bg-slate-500")} />
+            {label.name}
+          </span>
+        ))}
+        {issue.labels.length > 1 ? (
+          <span className="text-[11px] text-muted-foreground">+{issue.labels.length - 1}</span>
+        ) : null}
       </div>
     </article>
   );
@@ -383,27 +419,63 @@ function SortableBoardIssueCard({
 
 function BoardIssuePreviewCard({
   assigneeLabel,
-  issue
+  issue,
+  projectKey,
+  stateIconKey
 }: {
   assigneeLabel: string;
   issue: BoardIssueDto;
+  projectKey: string;
+  stateIconKey: BoardColumn["iconKey"];
 }) {
   return (
     <article className="rounded-2xl border border-border/70 bg-background/95 p-3 shadow-lg">
-      <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">{issue.issueKey}</div>
-      <div className="mt-1.5 text-sm font-semibold leading-5 text-foreground">{issue.title}</div>
-      <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
-        {issue.description.trim().length > 0 ? issue.description : "No description yet."}
-      </p>
-      <div className="mt-3 flex items-center justify-end">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">{issue.issueKey}</div>
+          <div className="mt-2 flex items-center gap-2 text-sm font-semibold leading-5 text-foreground">
+            <span className="shrink-0 text-muted-foreground">{renderProjectBoardIcon(stateIconKey, "size-4")}</span>
+            {issue.title}
+          </div>
+        </div>
         <div
-          className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-secondary/35 px-1.5 py-1"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-secondary/35 text-muted-foreground"
           title={assigneeLabel}
         >
-          <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary/12 text-[10px] font-semibold text-primary">
-            {getInitials(assigneeLabel)}
-          </span>
+          {issue.assigneeUserId ? (
+            <span className="text-[10px] font-semibold text-foreground">{getInitials(assigneeLabel)}</span>
+          ) : (
+            <UserRound className="size-3.5" />
+          )}
         </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {issue.priority !== "none" ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[11px] font-medium",
+              priorityToneClasses[issue.priority]
+            )}
+          >
+            {getPriorityIcon(issue.priority)}
+          </span>
+        ) : null}
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground">
+          <Tag className="size-3" />
+          {projectKey}
+        </span>
+        {issue.labels.slice(0, 1).map((label) => (
+          <span
+            key={label.id}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground"
+          >
+            <span className={cn("size-2 rounded-full", labelColorClasses[label.color] ?? "bg-slate-500")} />
+            {label.name}
+          </span>
+        ))}
+        {issue.labels.length > 1 ? (
+          <span className="text-[11px] text-muted-foreground">+{issue.labels.length - 1}</span>
+        ) : null}
       </div>
     </article>
   );
@@ -617,6 +689,12 @@ export function ProjectBoardSurface({
         { label: workspace.name, href: getWorkspaceHref(workspace.slug) },
         { label: project.key }
       ]}
+      workspaceActionsContext={{
+        currentProjectKey: project.key,
+        projects,
+        workspaceMembers,
+        workspaceSlug: workspace.slug
+      }}
       actions={
         <>
           <Link href={getProjectHref(workspace.slug, project.key, "triage")} className={tabLinkClassName(false)}>
@@ -633,10 +711,12 @@ export function ProjectBoardSurface({
       tabs={
         <div className="flex flex-wrap gap-2">
           <Link href={getProjectHref(workspace.slug, project.key, "issues")} className={tabLinkClassName(false)}>
-            Issues
+            <Rows3 className="size-4" />
+            <span className="sr-only">Issues</span>
           </Link>
           <Link href={getProjectHref(workspace.slug, project.key, "board")} className={tabLinkClassName(true)}>
-            Board
+            <LayoutGrid className="size-4" />
+            <span className="sr-only">Board</span>
           </Link>
           <Link href={getProjectHref(workspace.slug, project.key, "triage")} className={tabLinkClassName(false)}>
             Triage
@@ -653,11 +733,11 @@ export function ProjectBoardSurface({
               Board only view
             </div>
             <p className="text-sm leading-6 text-muted-foreground">
-              Drag issues between columns to update state. Cards stay intentionally quiet: title, description, issue key, and assignee only.
+              Drag issues between columns to update state. Cards show the most useful metadata directly: assignee, priority, project, and labels.
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CircleDot className="size-4" />
+            {renderProjectBoardIcon(configColumns[0]?.iconKey ?? "circle_dashed", "size-4")}
             {acceptedIssueCount} accepted issue{acceptedIssueCount === 1 ? "" : "s"}
           </div>
         </div>
@@ -674,6 +754,7 @@ export function ProjectBoardSurface({
                   key={column.state}
                   accent={column.accent}
                   count={column.issues.length}
+                  iconKey={column.iconKey}
                   label={column.label}
                   state={column.state}
                 >
@@ -685,6 +766,8 @@ export function ProjectBoardSurface({
                             key={issue.id}
                             issue={issue}
                             assigneeLabel={getAssigneeLabel(issue, memberNameById)}
+                            projectKey={project.key}
+                            stateIconKey={column.iconKey}
                             onNavigate={() => router.push(`/${workspace.slug}/${project.key}/issues/${issue.issueKey}`)}
                             onTransition={(nextState) => void handleTransition(issue, nextState)}
                           />
@@ -706,6 +789,8 @@ export function ProjectBoardSurface({
                 <BoardIssuePreviewCard
                   issue={activeIssue}
                   assigneeLabel={getAssigneeLabel(activeIssue, memberNameById)}
+                  projectKey={project.key}
+                  stateIconKey={columns.find((column) => column.state === activeIssue.state)?.iconKey ?? "circle_dashed"}
                 />
               </div>
             ) : null}
@@ -717,7 +802,7 @@ export function ProjectBoardSurface({
           <DialogHeader>
             <DialogTitle>Customize board</DialogTitle>
             <DialogDescription>
-              Reorder columns and tune the labels or accents for the whole project. Workflow states stay the same, only the presentation changes.
+              Reorder columns and tune the labels, icons, or accents for the whole project. Workflow states stay the same, only the presentation changes.
             </DialogDescription>
           </DialogHeader>
           {canEditBoard ? (
@@ -744,7 +829,7 @@ export function ProjectBoardSurface({
                 Board settings require project management access.
               </div>
               <p className="mt-2 leading-6 text-amber-900/80">
-                Owners and maintainers can rename or reorder columns for everyone in the project.
+                Owners and maintainers can rename, reorder, and restyle columns for everyone in the project.
               </p>
               <div className="mt-4">
                 <Button variant="outline" onClick={closeCustomizeDialog}>

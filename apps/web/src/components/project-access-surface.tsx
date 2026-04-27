@@ -111,6 +111,12 @@ export const ProjectAccessSurface = ({
         { label: project.key, href: getProjectHref(workspace.slug, project.key) },
         { label: "Project access" }
       ]}
+      workspaceActionsContext={{
+        currentProjectKey: project.key,
+        projects,
+        workspaceMembers,
+        workspaceSlug: workspace.slug
+      }}
       sidebar={
         <>
           <SidebarGroup title="Workspace">
@@ -204,7 +210,7 @@ export const ProjectAccessSurface = ({
                   {isSaving ? "Saving..." : "Add or update member"}
                 </Button>
                 {error ? (
-                  <div className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-200">
+                  <div className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {error}
                   </div>
                 ) : null}
@@ -267,7 +273,7 @@ export const ProjectAccessSurface = ({
                     </select>
                     <Button
                       variant="outline"
-                      className="border-red-500/35 text-red-700 hover:bg-red-500/10 dark:text-red-200"
+                      className="border-destructive/35 text-destructive hover:bg-destructive/10"
                       onClick={() => void handleRemove(member.userId)}
                       disabled={isSaving}
                     >

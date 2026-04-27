@@ -15,6 +15,8 @@ const toBoardIssue = (issue: Issue): BoardIssueDto => ({
   state: issue.state,
   priority: issue.priority,
   assigneeUserId: issue.assigneeUserId,
+  dueDate: issue.dueDate,
+  labels: issue.labels,
   updatedAt: issue.updatedAt
 });
 

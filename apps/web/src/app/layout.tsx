@@ -66,11 +66,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       {...(initialTheme ? { "data-theme": initialTheme } : {})}
       style={{ colorScheme: initialTheme }}
     >
-      <head>
-        <Script id="theme-boot" strategy="beforeInteractive">
-          {themeBootScript}
-        </Script>
-      </head>
+      <Script id="theme-boot" strategy="beforeInteractive">
+        {themeBootScript}
+      </Script>
       <body className="min-h-screen">
         <AppPreferencesProvider>{children}</AppPreferencesProvider>
       </body>

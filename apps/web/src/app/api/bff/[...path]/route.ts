@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 
-import { buildInternalAuthHeaders } from "@wevlo/auth";
 import { authOptions } from "@/auth";
+import { buildApiInternalAuthHeaders } from "@/lib/internal-auth-headers";
 import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/runtime-env";
 
 type BffRouteContext = {
@@ -30,7 +30,7 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[]): Promi
   headers.delete("cookie");
   headers.delete("host");
   headers.delete("content-length");
-  const internalHeaders = buildInternalAuthHeaders(
+  const internalHeaders = buildApiInternalAuthHeaders(
     {
       provider: session.user.provider,
       providerUserId: session.user.providerUserId,

@@ -3,12 +3,15 @@ import { dirname, join, parse } from "node:path";
 
 import { config as loadDotenv } from "dotenv";
 
-export const findNearestEnvPath = (startDir: string = process.cwd()): string | null => {
+export const findNearestEnvPath = (
+  startDir: string = process.cwd(),
+  envFileName: string = ".env.local"
+): string | null => {
   let currentDir = startDir;
   const { root } = parse(startDir);
 
   while (true) {
-    const candidate = join(currentDir, ".env");
+    const candidate = join(currentDir, envFileName);
 
     if (existsSync(candidate)) {
       return candidate;
@@ -22,7 +25,10 @@ export const findNearestEnvPath = (startDir: string = process.cwd()): string | n
   }
 };
 
-const envPath = findNearestEnvPath();
+const isProductionRuntime = process.env.NODE_ENV === "production";
+const envPath = isProductionRuntime
+  ? findNearestEnvPath(process.cwd(), ".env.local.production") ?? findNearestEnvPath(process.cwd(), ".env.local")
+  : findNearestEnvPath(process.cwd(), ".env.local.local") ?? findNearestEnvPath(process.cwd(), ".env.local");
 
 if (envPath) {
   loadDotenv({ path: envPath });

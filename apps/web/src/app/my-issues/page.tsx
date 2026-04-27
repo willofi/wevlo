@@ -1,17 +1,29 @@
-import { redirect } from "next/navigation";
+import { MyIssuesSurface } from "@/components/my-issues-surface";
+import { getAppShellData } from "@/lib/app-shell-data";
+import { listWorkspaces } from "@/lib/server-api";
 
-import { getSession, listWorkspaces } from "@/lib/server-api";
+type GlobalMyIssuesPageProps = {
+  searchParams: Promise<{
+    project?: string;
+    tab?: "activity" | "assigned" | "created" | "subscribed";
+    workspace?: string;
+  }>;
+};
 
-export default async function GlobalMyIssuesPage() {
-  const [session, workspaces] = await Promise.all([
-    getSession(),
+export default async function GlobalMyIssuesPage({ searchParams }: GlobalMyIssuesPageProps) {
+  const [params, shellData, workspaces] = await Promise.all([
+    searchParams,
+    getAppShellData(),
     listWorkspaces()
   ]);
-  const workspaceSlug = session.defaultWorkspaceSlug ?? workspaces[0]?.slug;
 
-  if (!workspaceSlug) {
-    redirect("/");
-  }
-
-  redirect(`/${workspaceSlug}/my-issues`);
+  return (
+    <MyIssuesSurface
+      {...(params.project ? { initialProjectKey: params.project } : {})}
+      {...(params.tab ? { initialTab: params.tab } : {})}
+      {...(params.workspace ? { initialWorkspaceSlug: params.workspace } : {})}
+      viewer={shellData.viewer}
+      workspaces={workspaces}
+    />
+  );
 }

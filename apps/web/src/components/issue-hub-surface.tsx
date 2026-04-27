@@ -34,6 +34,7 @@ import {
   getProjectAccessHref,
   getProjectHref,
   getProjectIntegrationsHref,
+  getMyIssuesHref,
   getWorkspaceAccessHref,
   getWorkspaceIntegrationsHref,
   getWorkspaceMembersHref,
@@ -1488,7 +1489,7 @@ export function IssueHubSurface(props: IssueHubSurfaceProps) {
             >
               Create project
             </Button>
-            <Link href={`/${props.workspace.slug}/my-issues`} style={secondaryButtonStyle}>
+            <Link href={getMyIssuesHref({ workspaceSlug: props.workspace.slug })} style={secondaryButtonStyle}>
               My issues
             </Link>
             <Link href={getWorkspaceMembersHref(props.workspace.slug)} style={secondaryButtonStyle}>
@@ -1506,7 +1507,7 @@ export function IssueHubSurface(props: IssueHubSurfaceProps) {
           <>
             <SidebarGroup title="Work">
               <SidebarLink href={getWorkspaceHref(props.workspace.slug)} label="Workspace overview" active />
-              <SidebarLink href={`/${props.workspace.slug}/my-issues`} label="My issues" />
+              <SidebarLink href={getMyIssuesHref({ workspaceSlug: props.workspace.slug })} label="My issues" />
               {props.projects.map((project) => (
                 <SidebarLink
                   key={project.id}
@@ -1663,7 +1664,7 @@ export function IssueHubSurface(props: IssueHubSurfaceProps) {
       ]}
       actions={
         <>
-          <Link href={`/${props.workspace.slug}/my-issues`} style={secondaryButtonStyle}>
+          <Link href={getMyIssuesHref({ workspaceSlug: props.workspace.slug })} style={secondaryButtonStyle}>
             My issues
           </Link>
           <Link href={getProjectAccessHref(props.workspace.slug, props.project.key)} style={secondaryButtonStyle}>

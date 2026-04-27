@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getRequestStatus, isRequestStatus } from "@/lib/request-error";
+import { getRequestStatus, isRequestStatus } from "./request-error";
 
 describe("request-error helpers", () => {
   it("parses http status codes from request failures", () => {
@@ -16,4 +16,3 @@ describe("request-error helpers", () => {
     expect(getRequestStatus("boom")).toBeNull();
   });
 });
-

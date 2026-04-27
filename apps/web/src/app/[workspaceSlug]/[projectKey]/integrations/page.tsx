@@ -7,7 +7,8 @@ import {
   getProjectIntegrations,
   getProjectsForWorkspace,
   getWorkspaceBySlug,
-  getWorkspaceIntegrations
+  getWorkspaceIntegrations,
+  getWorkspaceMembers
 } from "@/lib/server-api";
 
 type ProjectIntegrationsPageProps = {
@@ -31,11 +32,12 @@ export default async function ProjectIntegrationsPage({ params }: ProjectIntegra
     notFound();
   }
 
-  const [projects, integrations, projectIntegrations, shellData] = await Promise.all([
+  const [projects, integrations, projectIntegrations, shellData, workspaceMembers] = await Promise.all([
     getProjectsForWorkspace(workspace.slug),
     getWorkspaceIntegrations(workspace.slug),
     getProjectIntegrations(workspace.slug, project.key),
-    getAppShellData()
+    getAppShellData(),
+    getWorkspaceMembers(workspace.slug)
   ]);
 
   return (
@@ -48,6 +50,7 @@ export default async function ProjectIntegrationsPage({ params }: ProjectIntegra
       shellViewer={shellData.viewer}
       shellWorkspaces={shellData.workspaces}
       workspace={workspace}
+      workspaceMembers={workspaceMembers}
     />
   );
 }

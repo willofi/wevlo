@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { WorkspaceProjectsSurface } from "@/components/workspace-projects-surface";
 import { requireCurrentAuthSession } from "@/lib/auth-server";
 import { getRequestStatus } from "@/lib/request-error";
-import { getProjectsForWorkspace, getWorkspaceBySlug, listWorkspaces } from "@/lib/server-api";
+import { getMe, getProjectsForWorkspace, getWorkspaceBySlug, getWorkspaceMembers, listWorkspaces } from "@/lib/server-api";
 
 type WorkspacePageProps = {
   params: Promise<{
@@ -29,9 +29,11 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     notFound();
   }
 
-  const [authSession, projects, workspaces] = await Promise.all([
+  const [, me, projects, workspaceMembers, workspaces] = await Promise.all([
     requireCurrentAuthSession(`/${workspace.slug}`),
+    getMe(),
     getProjectsForWorkspace(workspace.slug),
+    getWorkspaceMembers(workspace.slug),
     listWorkspaces()
   ]);
 
@@ -39,10 +41,11 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     <WorkspaceProjectsSurface
       projects={projects}
       viewer={{
-        email: authSession?.userEmail ?? null,
-        name: authSession?.userName ?? "Workspace member"
+        email: me.user.email,
+        name: me.user.name
       }}
       workspace={workspace}
+      workspaceMembers={workspaceMembers}
       workspaces={workspaces}
     />
   );

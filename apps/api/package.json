@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.917.0",
     "@fastify/cors": "catalog:",
+    "@fastify/multipart": "latest",
     "@wevlo/audit-activity": "workspace:*",
     "@wevlo/auth": "workspace:*",
     "@wevlo/authz": "workspace:*",
@@ -13,6 +15,7 @@
     "@wevlo/identity-tenancy": "workspace:*",
     "@wevlo/integrations": "workspace:*",
     "@wevlo/issues": "workspace:*",
+    "@wevlo/notifications": "workspace:*",
     "@wevlo/projects": "workspace:*",
     "dotenv": "catalog:",
     "fastify": "latest",

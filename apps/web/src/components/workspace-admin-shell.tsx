@@ -7,6 +7,7 @@ import { cn } from "@wevlo/ui-web";
 import { getAppShellData } from "@/lib/app-shell-data";
 import { AppShell } from "@/components/app-shell";
 import {
+  getMyIssuesHref,
   getProjectHref,
   getWorkspaceAccessHref,
   getWorkspaceHref,
@@ -48,7 +49,7 @@ export const WorkspaceAdminShell = async ({ active, children, projects, workspac
               <Link href={getWorkspaceAccessHref(workspace.slug)} className={sidebarLinkStyle(active === "access")}>
                 Access
               </Link>
-              <Link href={`/${workspace.slug}/my-issues`} className={sidebarLinkStyle(false)}>
+              <Link href={getMyIssuesHref({ workspaceSlug: workspace.slug })} className={sidebarLinkStyle(false)}>
                 My issues
               </Link>
             </div>

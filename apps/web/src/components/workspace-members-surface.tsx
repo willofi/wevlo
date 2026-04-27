@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import type {
@@ -12,7 +13,8 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { PageState, pageStateButtonStyle, pageStateLinkStyle } from "@/components/page-state";
 import {
   createWorkspaceInvitation,
-  getInviteHref
+  getInviteHref,
+  getWorkspaceMemberHref
 } from "@/lib/issue-hub-data";
 
 type WorkspaceMembersSurfaceProps = {
@@ -119,7 +121,12 @@ export const WorkspaceMembersSurface = ({
               {members.map((member) => (
                 <div key={member.userId} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/70 px-4 py-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-foreground">{member.user.name}</div>
+                    <Link
+                      href={getWorkspaceMemberHref(workspace.slug, member.userId)}
+                      className="text-sm font-semibold text-foreground hover:text-primary"
+                    >
+                      {member.user.name}
+                    </Link>
                     <div className="mt-1 text-sm text-muted-foreground">{member.user.email ?? member.userId}</div>
                   </div>
                   <div className="shrink-0 rounded-full border border-border/70 bg-secondary/40 px-3 py-1 text-xs font-semibold text-foreground">

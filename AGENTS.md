@@ -19,6 +19,7 @@ Use these defaults unless project-local code clearly requires otherwise:
 - Validate assumptions at system boundaries and make failure paths easy to trace.
 - Test the changed behavior at the cheapest reliable level first.
 - Surface assumptions, risks, and trade-offs early.
+- When providing explanatory responses, always write them in Korean only.
 
 ## Shared Baseline
 

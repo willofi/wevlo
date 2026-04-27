@@ -1,5 +1,5 @@
 import type { SyncStatusDto } from "@wevlo/contracts";
-import type { Database } from "@wevlo/data-access";
+import type { DatabaseExecutor } from "@wevlo/data-access";
 
 import type { IntegrationRepository } from "../application/integration-repository";
 import { buildSyncStatus, type IntegrationInstallation, type IntegrationProjectLink, type ProjectRef, type SyncCursor, type WebhookDelivery } from "../domain/integration";
@@ -83,7 +83,7 @@ const mapWebhookDelivery = (row: {
 });
 
 export class PostgresIntegrationRepository implements IntegrationRepository {
-  constructor(private readonly database: Database) {}
+  constructor(private readonly database: DatabaseExecutor) {}
 
   async countPendingDeliveriesByProjectLinkId(projectLinkId: string): Promise<number> {
     const row = await this.database

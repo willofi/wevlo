@@ -1,9 +1,9 @@
 import type { ProjectMemberDto, ProjectRole, WorkspaceInvitationDto } from "@wevlo/contracts";
 import { createEntityId } from "@wevlo/core";
-import type { Database } from "@wevlo/data-access";
+import type { DatabaseExecutor } from "@wevlo/data-access";
 
 const hydrateUser = async (
-  database: Database,
+  database: DatabaseExecutor,
   userId: string
 ): Promise<ProjectMemberDto["user"] | null> => {
   const userRow = await database
@@ -26,6 +26,7 @@ const hydrateUser = async (
   return {
     createdAt: userRow.created_at,
     email: userRow.email,
+    handle: userRow.handle,
     id: userRow.id,
     identities: identities.map((identity) => ({
       createdAt: identity.created_at,
@@ -73,7 +74,7 @@ const mapInvitationRow = (row: {
 });
 
 export class PostgresProjectCollaborationRepository {
-  constructor(private readonly database: Database) {}
+  constructor(private readonly database: DatabaseExecutor) {}
 
   async listMembers(projectId: string): Promise<ProjectMemberDto[]> {
     const projectRow = await this.database

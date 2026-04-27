@@ -5,8 +5,10 @@ import { type DragEndEvent, DndContext, KeyboardSensor, PointerSensor, closestCe
 import { CSS } from "@dnd-kit/utilities";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
-import type { ProjectBoardAccent, ProjectBoardColumnConfigDto } from "@wevlo/contracts";
+import type { ProjectBoardAccent, ProjectBoardColumnConfigDto, ProjectBoardIconKey } from "@wevlo/contracts";
 import { Input, cn } from "@wevlo/ui-web";
+
+import { projectBoardIconOptions, renderProjectBoardIcon } from "@/lib/issue-presentation";
 
 export const boardAccentLabels: Record<ProjectBoardAccent, string> = {
   slate: "Slate",
@@ -18,34 +20,34 @@ export const boardAccentLabels: Record<ProjectBoardAccent, string> = {
 
 export const boardAccentClasses: Record<ProjectBoardAccent, { chip: string; dot: string; panel: string; rail: string }> = {
   slate: {
-    chip: "border-slate-200 bg-slate-100 text-slate-700",
+    chip: "border-slate-500/25 bg-slate-500/12 text-foreground",
     dot: "bg-slate-400",
     panel: "border-border/70 bg-card/70",
-    rail: "border-t-slate-200"
+    rail: "border-t-slate-400/35"
   },
   blue: {
-    chip: "border-sky-200 bg-sky-100 text-sky-700",
+    chip: "border-sky-500/25 bg-sky-500/12 text-foreground",
     dot: "bg-sky-400",
     panel: "border-border/70 bg-card/70",
-    rail: "border-t-sky-200"
+    rail: "border-t-sky-400/35"
   },
   amber: {
-    chip: "border-amber-200 bg-amber-100 text-amber-700",
+    chip: "border-amber-500/25 bg-amber-500/12 text-foreground",
     dot: "bg-amber-400",
     panel: "border-border/70 bg-card/70",
-    rail: "border-t-amber-200"
+    rail: "border-t-amber-400/35"
   },
   teal: {
-    chip: "border-teal-200 bg-teal-100 text-teal-700",
+    chip: "border-teal-500/25 bg-teal-500/12 text-foreground",
     dot: "bg-teal-400",
     panel: "border-border/70 bg-card/70",
-    rail: "border-t-teal-200"
+    rail: "border-t-teal-400/35"
   },
   rose: {
-    chip: "border-rose-200 bg-rose-100 text-rose-700",
+    chip: "border-rose-500/25 bg-rose-500/12 text-foreground",
     dot: "bg-rose-400",
     panel: "border-border/70 bg-card/70",
-    rail: "border-t-rose-200"
+    rail: "border-t-rose-400/35"
   }
 };
 
@@ -62,6 +64,7 @@ type SortableBoardColumnRowProps = {
   column: ProjectBoardColumnConfigDto;
   disabled?: boolean | undefined;
   onAccentChange: (accent: ProjectBoardAccent) => void;
+  onIconChange: (iconKey: ProjectBoardIconKey) => void;
   onLabelChange: (label: string) => void;
 };
 
@@ -83,6 +86,7 @@ function SortableBoardColumnRow({
   column,
   disabled = false,
   onAccentChange,
+  onIconChange,
   onLabelChange
 }: SortableBoardColumnRowProps) {
   const {
@@ -105,7 +109,7 @@ function SortableBoardColumnRow({
         transition
       }}
       className={cn(
-        "grid gap-3 rounded-2xl border border-t-[3px] bg-card/70 p-4 shadow-sm md:grid-cols-[auto_minmax(0,1fr)_160px]",
+        "grid gap-3 rounded-2xl border border-t-[3px] bg-card/70 p-4 shadow-sm md:grid-cols-[auto_minmax(0,1fr)_140px_160px]",
         boardAccentClasses[column.accent].panel,
         boardAccentClasses[column.accent].rail,
         isDragging && "opacity-70 shadow-lg"
@@ -124,10 +128,26 @@ function SortableBoardColumnRow({
       <div className="grid gap-2">
         <div className="flex items-center gap-2">
           <span className={cn("size-2 rounded-full", boardAccentClasses[column.accent].dot)} />
+          <span className="text-muted-foreground">{renderProjectBoardIcon(column.iconKey, "size-4")}</span>
           <span className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{column.state.replace("_", " ")}</span>
         </div>
         <Input value={column.label} onChange={(event) => onLabelChange(event.target.value)} disabled={disabled} />
       </div>
+      <label className="grid gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Icon</span>
+        <select
+          value={column.iconKey}
+          onChange={(event) => onIconChange(event.target.value as ProjectBoardIconKey)}
+          disabled={disabled}
+          className={selectClassName}
+        >
+          {projectBoardIconOptions.map((option) => (
+            <option key={option.iconKey} value={option.iconKey}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="grid gap-2">
         <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Accent</span>
         <select
@@ -176,7 +196,7 @@ export function ProjectBoardSettingsEditor({
   return (
     <div className="grid gap-3">
       <div className="text-sm leading-6 text-muted-foreground">
-        Reorder board columns for the whole project and choose cleaner labels or accents without changing the underlying workflow states.
+        Reorder board columns for the whole project and tune labels, icons, or accents without changing the underlying workflow states.
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={columns.map((column) => column.state)} strategy={verticalListSortingStrategy}>
@@ -197,6 +217,13 @@ export function ProjectBoardSettingsEditor({
                   onChange(
                     columns.map((candidate) =>
                       candidate.state === column.state ? { ...candidate, accent } : candidate
+                    )
+                  )
+                }
+                onIconChange={(iconKey) =>
+                  onChange(
+                    columns.map((candidate) =>
+                      candidate.state === column.state ? { ...candidate, iconKey } : candidate
                     )
                   )
                 }

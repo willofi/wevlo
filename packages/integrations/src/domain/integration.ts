@@ -1,7 +1,6 @@
 import type {
   IntegrationAuthType,
   IntegrationInstallationDto,
-  IntegrationInstallationStatus,
   IntegrationProjectLinkDto,
   IntegrationProvider,
   RemoteIssueCommentDto,

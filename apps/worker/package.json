@@ -8,6 +8,8 @@
     "@wevlo/data-access": "workspace:*",
     "@wevlo/integrations": "workspace:*",
     "@wevlo/issues": "workspace:*"
+    ,
+    "@wevlo/notifications": "workspace:*"
   },
   "scripts": {
     "dev": "tsx watch src/main.ts",

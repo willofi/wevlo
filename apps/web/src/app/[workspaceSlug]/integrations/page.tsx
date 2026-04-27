@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } fro
 import { AppShell } from "@/components/app-shell";
 import { getAppShellData } from "@/lib/app-shell-data";
 import {
+  getMyIssuesHref,
   getProjectHref,
   getProjectIntegrationsHref,
   getWorkspaceAccessHref,
@@ -78,7 +79,7 @@ export default async function WorkspaceIntegrationsPage({ params }: WorkspaceInt
             <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Work</div>
             <div className="mt-1.5 grid gap-1">
               <SidebarLink href={getWorkspaceHref(workspace.slug)} label="Workspace overview" />
-              <SidebarLink href={`/${workspace.slug}/my-issues`} label="My issues" />
+              <SidebarLink href={getMyIssuesHref({ workspaceSlug: workspace.slug })} label="My issues" />
               {projects.map((project) => (
                 <SidebarLink
                   key={project.id}

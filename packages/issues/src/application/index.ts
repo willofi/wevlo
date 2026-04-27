@@ -1,4 +1,5 @@
 export * from "./accept-triage";
+export * from "./comment-mentions";
 export * from "./comment-on-issue";
 export * from "./create-issue";
 export * from "./errors";
@@ -7,6 +8,7 @@ export * from "./get-issue-board";
 export * from "./issue-repository";
 export * from "./list-issues";
 export * from "./resolve-project-board-view";
+export * from "./set-comment-reaction";
 export * from "./transition-issue";
 export * from "./triage-issue";
 export * from "./update-issue";

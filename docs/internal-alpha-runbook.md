@@ -28,7 +28,7 @@ Out of scope:
 
 ## Required Environment
 
-Copy [.env.example](../.env.example) to `.env` and review at least these values:
+Copy [.env.example](../.env.example) to `.env.local` for local development and review at least these values:
 
 - `DATABASE_URL`
 - `POSTGRES_USER`
@@ -40,6 +40,13 @@ Copy [.env.example](../.env.example) to `.env` and review at least these values:
 - `NEXT_PUBLIC_API_BASE_URL`
 - `NEXTAUTH_URL`
 - `WEVLO_INTERNAL_AUTH_TOKEN`
+- `WEVLO_STORAGE_DRIVER`
+- `WEVLO_ATTACHMENT_STORAGE_DIR`
+- `WEVLO_S3_ENDPOINT`
+- `WEVLO_S3_REGION`
+- `WEVLO_S3_ACCESS_KEY_ID`
+- `WEVLO_S3_SECRET_ACCESS_KEY`
+- `WEVLO_S3_BUCKET`
 - `AUTH_SECRET`
 - `AUTH_GOOGLE_ID`
 - `AUTH_GOOGLE_SECRET`
@@ -50,13 +57,14 @@ Recommended defaults for internal alpha:
 - Set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` only when testing Google login
 - Set `NEXTAUTH_URL=http://localhost:3000` for local development
 - Keep `WEVLO_INTERNAL_AUTH_TOKEN` identical for web and API
+- Keep `WEVLO_STORAGE_DRIVER=local` for local development unless testing Supabase Storage
 
 ## Bootstrap
 
 1. Copy env:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 2. Install dependencies:
@@ -76,6 +84,9 @@ pnpm db:up
 ```bash
 pnpm db:migrate
 ```
+
+Production note: API and worker startup do not run migrations automatically.
+Run `pnpm --filter @wevlo/data-access migrate` in the deployment pipeline before restart.
 
 5. Start the API:
 

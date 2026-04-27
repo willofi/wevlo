@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { useState } from "react";
+import { LayoutGrid, Rows3 } from "lucide-react";
 
 import type { IssueDetailDto, IssueState, ProjectSummaryDto, WorkspaceMemberDto, WorkspaceSummaryDto } from "@wevlo/contracts";
 import { Button, cn } from "@wevlo/ui-web";
@@ -13,7 +14,7 @@ import { IssueDetailInspector } from "@/components/issue-detail-inspector";
 import { IssueListTable } from "@/components/issue-list-table";
 import { PrototypeEmptyState } from "@/components/prototype-empty-state";
 import { PrototypeShell } from "@/components/prototype-shell";
-import { buildProjectShellHref, transitionIssue } from "@/lib/issue-hub-data";
+import { buildProjectShellHref, getIssueHref, transitionIssue } from "@/lib/issue-hub-data";
 import { buildUserDirectory } from "@/lib/user-directory";
 
 type ProjectShellSurfaceProps = {
@@ -25,6 +26,7 @@ type ProjectShellSurfaceProps = {
   projects: ProjectSummaryDto[];
   viewer: {
     email?: string | null;
+    id: string;
     name: string;
   };
   workspace: WorkspaceSummaryDto;
@@ -53,6 +55,7 @@ export function ProjectShellSurface({
   const [activeIssueKey, setActiveIssueKey] = useState(initialIssueKey);
   const [currentView, setCurrentView] = useState(initialView);
   const [isComposeOpen, setIsComposeOpen] = useState(initialComposeOpen);
+  const [composeState, setComposeState] = useState<IssueState | undefined>(undefined);
   const [selectedIssueKeys, setSelectedIssueKeys] = useState<string[]>([]);
 
   useEffect(() => {
@@ -97,11 +100,19 @@ export function ProjectShellSurface({
 
   const handleComposeChange = (open: boolean) => {
     setIsComposeOpen(open);
+    if (!open) {
+      setComposeState(undefined);
+    }
     updateRoute({
       ...(currentView ? { view: currentView } : {}),
       ...(open ? { compose: true } : {}),
       ...(selectedIssue ? { issueKey: selectedIssue.issueKey } : {})
     });
+  };
+
+  const handleCreateIssueWithState = (state: IssueState) => {
+    setComposeState(state);
+    setIsComposeOpen(true);
   };
 
   const handleViewChange = (view: "list" | "board") => {
@@ -130,14 +141,29 @@ export function ProjectShellSurface({
     );
   };
 
-  const handleIssueCreated = (issue: IssueDetailDto) => {
+  const handleIssueCreated = (
+    issue: IssueDetailDto,
+    createdProjectKey: string,
+    options?: { keepComposerOpen?: boolean }
+  ) => {
+    if (createdProjectKey !== project.key) {
+      setIsComposeOpen(Boolean(options?.keepComposerOpen));
+      router.push(getIssueHref(workspace.slug, createdProjectKey, issue.issueKey));
+      router.refresh();
+      return;
+    }
+
     setIssues((current) => [issue, ...current]);
     setActiveIssueKey(issue.issueKey);
-    setIsComposeOpen(false);
-    updateRoute({
-      issueKey: issue.issueKey,
-      view: currentView
-    });
+    setIsComposeOpen(Boolean(options?.keepComposerOpen));
+
+    if (!options?.keepComposerOpen) {
+      updateRoute({
+        issueKey: issue.issueKey,
+        view: currentView
+      });
+    }
+
     router.refresh();
   };
 
@@ -167,9 +193,15 @@ export function ProjectShellSurface({
         currentWorkspaceSlug={workspace.slug}
         projects={projects}
         viewer={viewer}
+        workspaceActionsContext={{
+          currentProjectKey: project.key,
+          projects,
+          workspaceMembers,
+          workspaceSlug: workspace.slug
+        }}
         workspaces={workspaces.map((candidate) => ({ name: candidate.name, slug: candidate.slug }))}
       >
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-foreground">{project.name}</div>
@@ -179,29 +211,36 @@ export function ProjectShellSurface({
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="inline-flex rounded-lg bg-card/40 p-1">
+              <div className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card/55 p-1">
                 <button
                   type="button"
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    currentView === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+                    "inline-flex size-9 items-center justify-center rounded-full transition-colors",
+                    currentView === "list"
+                      ? "bg-secondary text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-secondary/55 hover:text-foreground"
                   )}
                   onClick={() => handleViewChange("list")}
+                  aria-label="List view"
+                  title="List view"
                 >
-                  List
+                  <Rows3 className="size-4" />
                 </button>
                 <button
                   type="button"
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    currentView === "board" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+                    "inline-flex size-9 items-center justify-center rounded-full transition-colors",
+                    currentView === "board"
+                      ? "bg-secondary text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-secondary/55 hover:text-foreground"
                   )}
                   onClick={() => handleViewChange("board")}
+                  aria-label="Board view"
+                  title="Board view"
                 >
-                  Board
+                  <LayoutGrid className="size-4" />
                 </button>
               </div>
-              <Button onClick={() => handleComposeChange(true)}>New issue</Button>
             </div>
           </div>
 
@@ -226,11 +265,14 @@ export function ProjectShellSurface({
               assigneeDirectory={userDirectory}
               issues={[...issues].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))}
               onIssueSelect={handleIssueOpen}
+              onIssueUpdated={handleIssueUpdated}
+              onCreateIssue={handleCreateIssueWithState}
               onToggleIssueGroup={handleToggleAllIssues}
               onToggleIssueSelection={handleIssueSelection}
               projectKeyById={{ [project.id]: project.key }}
               selectedIssueKeys={selectedIssueKeys}
               workspaceSlug={workspace.slug}
+              workspaceMembers={workspaceMembers}
               {...(selectedIssue ? { currentIssueKey: selectedIssue.issueKey } : {})}
             />
           )}
@@ -242,16 +284,20 @@ export function ProjectShellSurface({
         onIssueUpdated={handleIssueUpdated}
         projectKey={project.key}
         userDirectory={userDirectory}
+        viewerUserId={viewer.id}
         workspaceMembers={workspaceMembers}
         workspaceSlug={workspace.slug}
         {...(selectedIssue ? { issue: selectedIssue } : {})}
       />
 
       <CreateIssueDialog
+        initialState={composeState}
         onCreated={handleIssueCreated}
         onOpenChange={handleComposeChange}
         open={isComposeOpen}
         projectKey={project.key}
+        projects={projects}
+        workspaceMembers={workspaceMembers}
         workspaceSlug={workspace.slug}
       />
     </>

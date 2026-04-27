@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { createIssue, type IssueRepository } from "@wevlo/issues";
+import type { createIssue, IssueRepository } from "@wevlo/issues";
 import type {
   IntegrationInstallationDto,
   IntegrationProjectLinkDto,
   RemoteIssueDto,
   SyncStatusDto
 } from "@wevlo/contracts";
-import type { ProjectId } from "@wevlo/core";
 
 import {
   createInstallationUseCase,
@@ -24,7 +23,12 @@ const makeIssueRepository = (): IssueRepository & {
   const issues = new Map<string, ReturnType<typeof createIssue>>();
 
   return {
+    addReaction: vi.fn(),
+    createAttachment: vi.fn(),
+    createLabel: vi.fn(),
+    deleteAttachment: vi.fn(),
     findByKey: vi.fn(async (projectId: string, issueKey: string) => issues.get(`${projectId}:${issueKey}`) ?? null),
+    findAttachment: vi.fn(),
     findBySourceLink: vi.fn(async (input) => {
       return (
         [...issues.values()].find(
@@ -40,11 +44,13 @@ const makeIssueRepository = (): IssueRepository & {
       );
     }),
     issues,
+    listLabels: vi.fn(async () => []),
     listByProject: vi.fn(async (projectId: string) => [...issues.values()].filter((issue) => issue.projectId === projectId)),
     nextIssueNumber: vi.fn(async (projectId: string) => {
       const current = [...issues.values()].filter((issue) => issue.projectId === projectId).length;
       return current + 1;
     }),
+    removeReaction: vi.fn(),
     save: vi.fn(async (issue) => {
       issues.set(`${issue.projectId}:${issue.issueKey}`, issue);
     })

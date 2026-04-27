@@ -1,8 +1,15 @@
 import type { UserDto, WorkspaceInvitationDto, WorkspaceMemberDto } from "@wevlo/contracts";
 import type { WorkspaceId } from "@wevlo/core";
-import type { Database } from "@wevlo/data-access";
+import { sql, type DatabaseExecutor } from "@wevlo/data-access";
 
-import { createUser, createUserIdentity, type User } from "../domain/user";
+import {
+  createUser,
+  createUserIdentity,
+  isUserHandleValid,
+  normalizeUserHandle,
+  UserHandleTakenError,
+  type User
+} from "../domain/user";
 import type { WorkspaceMembership } from "../domain/workspace-membership";
 import {
   acceptWorkspaceInvitation,
@@ -15,12 +22,14 @@ import {
 const mapUserRow = (row: {
   created_at: string;
   email: string | null;
+  handle: string;
   id: string;
   name: string;
   updated_at: string;
 }): Omit<UserDto, "identities"> => ({
   createdAt: row.created_at,
   email: row.email,
+  handle: row.handle,
   id: row.id,
   name: row.name,
   updatedAt: row.updated_at
@@ -42,7 +51,7 @@ const mapIdentityRow = (row: {
   userId: row.user_id
 });
 
-const hydrateUser = async (database: Database, userId: string): Promise<User | null> => {
+const hydrateUser = async (database: DatabaseExecutor, userId: string): Promise<User | null> => {
   const userRow = await database
     .selectFrom("users")
     .selectAll()
@@ -103,7 +112,42 @@ const toWorkspaceMembershipRole = (role: WorkspaceInvitationDto["role"]): Worksp
 };
 
 export class PostgresIdentityRepository {
-  constructor(private readonly database: Database) {}
+  constructor(private readonly database: DatabaseExecutor) {}
+
+  async isHandleAvailable(handle: string, excludeUserId?: string): Promise<boolean> {
+    const normalizedHandle = normalizeUserHandle(handle);
+    const result = excludeUserId
+      ? await sql<{ id: string }>`
+          select id
+          from users
+          where lower(handle) = ${normalizedHandle}
+            and id <> ${excludeUserId}
+          limit 1
+        `.execute(this.database)
+      : await sql<{ id: string }>`
+          select id
+          from users
+          where lower(handle) = ${normalizedHandle}
+          limit 1
+        `.execute(this.database);
+
+    return result.rows.length === 0;
+  }
+
+  private async generateAvailableHandle(seed: string, excludeUserId?: string): Promise<string> {
+    const baseHandle = normalizeUserHandle(seed);
+    let candidate = baseHandle;
+    let suffix = 0;
+
+    while (!(await this.isHandleAvailable(candidate, excludeUserId))) {
+      suffix += 1;
+      const suffixText = String(suffix);
+      const prefixLength = Math.max(3, 32 - suffixText.length);
+      candidate = `${baseHandle.slice(0, prefixLength)}${suffixText}`;
+    }
+
+    return candidate;
+  }
 
   async findUserById(userId: string): Promise<User | null> {
     return hydrateUser(this.database, userId);
@@ -147,8 +191,10 @@ export class PostgresIdentityRepository {
     provider: UserDto["identities"][number]["provider"];
     providerUserId: string;
   }): Promise<User> {
+    const handle = await this.generateAvailableHandle(input.name);
     const user = createUser({
       email: input.email ?? null,
+      handle,
       name: input.name
     });
     const identity = createUserIdentity({
@@ -164,6 +210,7 @@ export class PostgresIdentityRepository {
         .values({
           created_at: user.createdAt,
           email: user.email,
+          handle: user.handle,
           id: user.id,
           name: user.name,
           updated_at: user.updatedAt
@@ -189,11 +236,22 @@ export class PostgresIdentityRepository {
     };
   }
 
-  async updateUser(user: Pick<User, "id" | "email" | "name">): Promise<User> {
+  async updateUser(user: Pick<User, "email" | "handle" | "id" | "name">): Promise<User> {
+    const nextHandle = user.handle ?? normalizeUserHandle(user.name);
+
+    if (!isUserHandleValid(nextHandle)) {
+      throw new Error(`Invalid handle: ${nextHandle}`);
+    }
+
+    if (!(await this.isHandleAvailable(nextHandle, user.id))) {
+      throw new UserHandleTakenError(nextHandle);
+    }
+
     await this.database
       .updateTable("users")
       .set({
         email: user.email,
+        handle: nextHandle,
         name: user.name,
         updated_at: new Date().toISOString()
       })
@@ -434,12 +492,25 @@ export class PostgresIdentityRepository {
         .insertInto("workspace_memberships")
         .values({
           created_at: nextInvitation.acceptedAt ?? new Date().toISOString(),
-          role: toWorkspaceMembershipRole(nextInvitation.role),
+          role: nextInvitation.projectId ? "Member" : toWorkspaceMembershipRole(nextInvitation.role),
           user_id: acceptedByUserId,
           workspace_id: nextInvitation.workspaceId
         })
         .onConflict((conflict) => conflict.columns(["workspace_id", "user_id"]).doNothing())
         .execute();
+
+      if (nextInvitation.projectId) {
+        await trx
+          .insertInto("project_memberships")
+          .values({
+            created_at: nextInvitation.acceptedAt ?? new Date().toISOString(),
+            project_id: nextInvitation.projectId,
+            role: nextInvitation.role as "Developer" | "Guest" | "Maintainer" | "Owner" | "Planner",
+            user_id: acceptedByUserId
+          })
+          .onConflict((conflict) => conflict.columns(["project_id", "user_id"]).doNothing())
+          .execute();
+      }
     });
 
     return nextInvitation;
@@ -471,5 +542,24 @@ export class PostgresIdentityRepository {
       .where("id", "=", invitationId)
       .where("project_id", "is", null)
       .execute();
+  }
+
+  async updateProfile(input: {
+    handle?: string;
+    name?: string;
+    userId: string;
+  }): Promise<User> {
+    const currentUser = await this.findUserById(input.userId);
+
+    if (!currentUser) {
+      throw new Error(`User not found: ${input.userId}`);
+    }
+
+    return this.updateUser({
+      email: currentUser.email,
+      handle: input.handle ?? currentUser.handle,
+      id: currentUser.id,
+      name: input.name ?? currentUser.name
+    });
   }
 }

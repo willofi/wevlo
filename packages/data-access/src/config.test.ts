@@ -40,9 +40,18 @@ describe("env path discovery", () => {
   it("walks up parent directories to find the nearest root env file", () => {
     const nestedDir = join(tempRoot, "apps", "api");
     mkdirSync(nestedDir, { recursive: true });
-    const envPath = join(tempRoot, ".env");
+    const envPath = join(tempRoot, ".env.local");
     writeFileSync(envPath, "WEVLO_INTERNAL_AUTH_TOKEN=test\n");
 
     expect(findNearestEnvPath(nestedDir)).toBe(envPath);
+  });
+
+  it("supports custom env file names", () => {
+    const nestedDir = join(tempRoot, "apps", "web");
+    mkdirSync(nestedDir, { recursive: true });
+    const envLocalPath = join(tempRoot, ".env.local.local");
+    writeFileSync(envLocalPath, "WEVLO_INTERNAL_AUTH_TOKEN=test\n");
+
+    expect(findNearestEnvPath(nestedDir, ".env.local.local")).toBe(envLocalPath);
   });
 });
