@@ -3,7 +3,7 @@ import type { FastifyRequest } from "fastify";
 import { getDevUserId, getInternalAuthToken, isDevAuthAllowed } from "@wevlo/data-access";
 import type { AuthProvider } from "@wevlo/contracts";
 
-import { UnauthorizedError } from "./errors";
+import { UnauthorizedError } from "./errors.js";
 
 export type RequestIdentity = {
   email: string | null;

@@ -8,7 +8,7 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 
-import type { AttachmentStorage, StoredAttachment } from "./attachment-storage";
+import type { AttachmentStorage, StoredAttachment } from "./attachment-storage.js";
 
 type SupabaseS3AttachmentStorageOptions = {
   accessKeyId: string;

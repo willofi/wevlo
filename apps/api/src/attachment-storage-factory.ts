@@ -1,6 +1,6 @@
-import type { AttachmentStorage } from "./attachment-storage";
-import { LocalAttachmentStorage } from "./attachment-storage";
-import { SupabaseS3AttachmentStorage } from "./supabase-s3-attachment-storage";
+import type { AttachmentStorage } from "./attachment-storage.js";
+import { LocalAttachmentStorage } from "./attachment-storage.js";
+import { SupabaseS3AttachmentStorage } from "./supabase-s3-attachment-storage.js";
 
 type AttachmentStorageDriver = "local" | "supabase_s3";
 

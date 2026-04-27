@@ -1,6 +1,6 @@
 import { createDatabase, destroyDatabase, validateApiRuntimeEnv } from "@wevlo/data-access";
 
-import { buildApi } from "./app";
+import { buildApi } from "./app.js";
 
 const start = async () => {
   validateApiRuntimeEnv();

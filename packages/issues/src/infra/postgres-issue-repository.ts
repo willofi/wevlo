@@ -324,20 +324,15 @@ export class PostgresIssueRepository implements IssueRepository {
   }
 
   async save(issue: Issue): Promise<void> {
-    console.info(`Saving issue ${issue.issueKey} (${issue.id}) to database. Title: ${issue.title}, Desc Length: ${issue.description.length}`);
+    console.info(`Saving issue ${issue.issueKey} (${issue.id})`);
     
-    if ((this.database as { isTransaction?: boolean }).isTransaction) {
-      await this.persistIssue(this.database, issue);
-      return;
-    }
-
     await this.database.transaction().execute(async (trx) => {
       await this.persistIssue(trx, issue);
     });
   }
 
   private async persistIssue(executor: DatabaseExecutor, issue: Issue): Promise<void> {
-    console.info(`Persisting issue ${issue.issueKey} with ID ${issue.id}. Triage: ${issue.triageStatus}`);
+    console.info(`Persisting issue ${issue.issueKey} (${issue.id})`);
     
     await executor
         .insertInto("issues")
@@ -376,7 +371,7 @@ export class PostgresIssueRepository implements IssueRepository {
         )
         .execute();
 
-      await executor.deleteFrom("issue_comments").where("issue_id", "=", issue.id).execute();
+      // IMPORTANT: Delete reactions BEFORE comments because reactions reference comments via comment_id
       await executor
         .deleteFrom("issue_comment_reactions")
         .where(
@@ -385,6 +380,8 @@ export class PostgresIssueRepository implements IssueRepository {
           (eb) => eb.selectFrom("issue_comments").select("id").where("issue_id", "=", issue.id)
         )
         .execute();
+      
+      await executor.deleteFrom("issue_comments").where("issue_id", "=", issue.id).execute();
       await executor.deleteFrom("issue_label_assignments").where("issue_id", "=", issue.id).execute();
       await executor.deleteFrom("issue_source_links").where("issue_id", "=", issue.id).execute();
 

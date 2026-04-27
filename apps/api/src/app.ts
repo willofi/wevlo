@@ -110,9 +110,9 @@ import {
 } from "@wevlo/issues";
 import { PostgresNotificationRepository } from "@wevlo/notifications";
 
-import { getRequestIdentity } from "./dev-session";
-import { sendError, UnauthorizedError } from "./errors";
-import { createAttachmentStorageFromEnv } from "./attachment-storage-factory";
+import { getRequestIdentity } from "./dev-session.js";
+import { sendError, UnauthorizedError } from "./errors.js";
+import { createAttachmentStorageFromEnv } from "./attachment-storage-factory.js";
 import {
   buildIssueAssignedEvent,
   buildIssueCommentEvent,
@@ -123,7 +123,7 @@ import {
   buildProjectInvitationRevokedEvent,
   buildWorkspaceInvitationAcceptedEvent,
   buildWorkspaceInvitationReceivedEvent
-} from "./notification-events";
+} from "./notification-events.js";
 
 export type ApiDependencies = {
   database: Database;
@@ -1575,6 +1575,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
     }
 
+    app.log.info({ attachmentId: params.attachmentId, issueId: issue.id, issueKey: issue.issueKey }, "Attempting to delete attachment");
     const attachment = await issueRepository.findAttachment(params.attachmentId, issue.id);
 
     if (!attachment) {

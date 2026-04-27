@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyRequest } from "fastify";
 
-import { getRequestIdentity } from "./dev-session";
-import { UnauthorizedError } from "./errors";
+import { getRequestIdentity } from "./dev-session.js";
+import { UnauthorizedError } from "./errors.js";
 
 const buildRequest = (headers: Record<string, string | string[] | undefined>): FastifyRequest =>
   ({
