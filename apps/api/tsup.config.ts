@@ -7,6 +7,7 @@ export default defineConfig({
   clean: true,
   bundle: true,
   noExternal: [/^@wevlo\/.*/],
+  shims: true,
   outDir: "dist",
   platform: "node",
   sourcemap: true,
