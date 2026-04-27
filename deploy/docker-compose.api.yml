@@ -2,7 +2,7 @@ services:
   api:
     image: ghcr.io/${GHCR_REPOSITORY}/api:${IMAGE_TAG:-latest}
     container_name: wevlo-api
-    command: ["node", "--experimental-specifier-resolution=node", "apps/api/dist/apps/api/src/main.js"]
+    command: ["node", "apps/api/dist/main.js"]
     restart: unless-stopped
     env_file:
       - .env.production
