@@ -6,17 +6,7 @@ export default defineConfig({
   target: "node22",
   clean: true,
   bundle: true,
-  noExternal: [/^@wevlo\/.*/],
-  external: [
-    "fastify",
-    "pg",
-    "kysely",
-    "zod",
-    "dotenv",
-    "@fastify/cors",
-    "@fastify/multipart",
-    "@aws-sdk/client-s3"
-  ],
+  noExternal: [/^@wevlo\/.*/], // 내부 패키지만 번들링
   shims: true,
   outDir: "dist",
   platform: "node",
