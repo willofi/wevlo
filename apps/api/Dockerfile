@@ -30,7 +30,7 @@ RUN pnpm install --frozen-lockfile
 # 소스 코드 전체 복사 후 빌드 및 배포 추출
 COPY . .
 RUN pnpm --filter @wevlo/api build
-RUN pnpm --filter @wevlo/api --prod deploy --legacy /app/pruned
+RUN pnpm --filter @wevlo/api --prod deploy /app/pruned
 
 FROM base AS runtime
 WORKDIR /app
