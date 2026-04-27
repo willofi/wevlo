@@ -23,15 +23,13 @@
   },
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "build": "tsup",
+    "build": "tsc -p tsconfig.json --outDir dist",
+    "start": "tsx src/main.ts",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:unit": "vitest run --passWithNoTests",
     "test:contracts": "vitest run --passWithNoTests",
     "test:e2e": "vitest run --passWithNoTests"
-  },
-  "devDependencies": {
-    "tsup": "^8.5.1"
   }
 }

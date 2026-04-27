@@ -27,17 +27,20 @@ COPY packages/ui-core/package.json ./packages/ui-core/
 
 RUN pnpm install --frozen-lockfile
 
-# 소스 코드 전체 복사 후 빌드 및 배포 추출
+# 모든 소스 코드 복사 (tsx 실행을 위해 필요)
 COPY . .
-RUN pnpm --filter @wevlo/api build
+
+# 배포용 패키지 추출 (내부 의존성 포함)
 RUN pnpm --filter @wevlo/api --prod deploy /app/pruned
 
 FROM base AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
+# 추출된 파일 복사
 COPY --from=build /app/pruned .
 
 EXPOSE 4000
 
-CMD ["node", "dist/main.js"]
+# tsx를 사용하여 소스를 직접 실행 (모듈 해석 문제 완벽 해결)
+CMD ["pnpm", "start"]
