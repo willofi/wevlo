@@ -8,6 +8,7 @@ on:
       - ".github/workflows/deploy-api.yml"
       - "apps/api/**"
       - "packages/**"
+      - "deploy/**"
       - "pnpm-lock.yaml"
 
 concurrency:
