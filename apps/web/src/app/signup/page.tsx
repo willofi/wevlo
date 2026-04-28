@@ -42,7 +42,7 @@ export default function SignupPage() {
           <CardHeader className="flex flex-col items-center space-y-4 pb-8 lg:items-start">
             <Logo size={40} className="lg:hidden mb-2" />
             <div className="text-center lg:text-left space-y-1">
-              <CardTitle className=\"text-2xl font-bold tracking-tight\">Create your account</CardTitle>\
+              <CardTitle className="text-2xl font-bold tracking-tight">Create your account</CardTitle>
               <CardDescription>Get started with Wevlo today</CardDescription>
             </div>
           </CardHeader>
