@@ -2,7 +2,6 @@ import "./globals.css";
 
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
-import Script from "next/script";
 
 import { AppPreferencesProvider } from "@/components/app-preferences-provider";
 import { APP_PREFERENCES_COOKIE, parseAppPreferences } from "@/lib/app-preferences-shared";
@@ -66,10 +65,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       {...(initialTheme ? { "data-theme": initialTheme } : {})}
       style={{ colorScheme: initialTheme }}
     >
-      <Script id="theme-boot" strategy="beforeInteractive">
-        {themeBootScript}
-      </Script>
       <body className="min-h-screen">
+        <script
+          id="theme-boot"
+          dangerouslySetInnerHTML={{
+            __html: themeBootScript
+          }}
+        />
         <AppPreferencesProvider>{children}</AppPreferencesProvider>
       </body>
     </html>

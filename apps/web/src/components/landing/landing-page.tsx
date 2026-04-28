@@ -9,9 +9,9 @@ import {
   Zap, 
   Shield, 
   Users, 
-  BarChart3,
-  Github
+  BarChart3
 } from "lucide-react";
+import { FaGithub } from "react-icons/fa6";
 import { Button } from "@wevlo/ui-web";
 import { Logo } from "./logo";
 
@@ -41,7 +41,7 @@ export const LandingPage = () => {
       <main className="flex-1">
         {/* Hero Section */}
         <section className="relative overflow-hidden pt-20 pb-32 md:pt-32 md:pb-48">
-          <div className="absolute inset-0 -z-10 bg-[radial-gradient(45%_45%_at_50%_50%,rgba(59,130,246,0.1)_0%,transparent_100%)]" />
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(45%_45%_at_50%_50%,rgba(255,255,255,0.03)_0%,transparent_100%)]" />
           <div className="container mx-auto px-4 text-center">
             <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-medium text-primary mb-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
               <span className="mr-2">✨</span>
@@ -62,7 +62,7 @@ export const LandingPage = () => {
                 </Button>
               </Link>
               <Button variant="outline" size="lg" className="h-12 px-8 text-base">
-                <Github className="mr-2 h-4 w-4" />
+                <FaGithub className="mr-2 h-4 w-4" />
                 Star on GitHub
               </Button>
             </div>

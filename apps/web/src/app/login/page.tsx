@@ -20,7 +20,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(40%_40%_at_50%_50%,rgba(59,130,246,0.05)_0%,transparent_100%)]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(40%_40%_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_100%)]" />
       
       <Card className="w-full max-w-md border-border/40 bg-card/50 backdrop-blur-xl shadow-2xl">
         <CardHeader className="flex flex-col items-center space-y-4 pb-8">
@@ -83,10 +83,10 @@ export default function LoginPage() {
           <div className="pt-4 space-y-3">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">Demo Access</div>
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("demo-user-1")}>
+              <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("user_demo_owner")}>
                 Project Lead
               </Button>
-              <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("demo-user-2")}>
+              <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("user-ava")}>
                 Developer
               </Button>
             </div>

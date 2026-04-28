@@ -17,7 +17,7 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(40%_40%_at_50%_50%,rgba(59,130,246,0.05)_0%,transparent_100%)]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(40%_40%_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_100%)]" />
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-5xl items-center">
         <div className="hidden lg:block space-y-8 p-8">
@@ -95,6 +95,18 @@ export default function SignupPage() {
                 Sign up for Free
               </Button>
             </form>
+
+            <div className="pt-4 space-y-3 border-t border-border/40">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">Or try a demo</div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => void signIn("credentials", { userId: "user_demo_owner", callbackUrl: "/" })}>
+                  Project Lead
+                </Button>
+                <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => void signIn("credentials", { userId: "user-ava", callbackUrl: "/" })}>
+                  Developer
+                </Button>
+              </div>
+            </div>
           </CardContent>
           <div className="px-8 pb-8 text-center text-sm text-muted-foreground">
             Already have an account?{" "}

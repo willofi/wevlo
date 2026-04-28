@@ -204,36 +204,50 @@ export class PostgresIdentityRepository {
       userId: user.id
     });
 
-    await this.database.transaction().execute(async (trx) => {
-      await trx
-        .insertInto("users")
-        .values({
-          created_at: user.createdAt,
-          email: user.email,
-          handle: user.handle,
-          id: user.id,
-          name: user.name,
-          updated_at: user.updatedAt
-        })
-        .execute();
+    try {
+      await this.database.transaction().execute(async (trx) => {
+        await trx
+          .insertInto("users")
+          .values({
+            created_at: user.createdAt,
+            email: user.email,
+            handle: user.handle,
+            id: user.id,
+            name: user.name,
+            updated_at: user.updatedAt
+          })
+          .execute();
 
-      await trx
-        .insertInto("user_identities")
-        .values({
-          created_at: identity.createdAt,
-          email: identity.email,
-          id: identity.id,
-          provider: identity.provider,
-          provider_user_id: identity.providerUserId,
-          user_id: identity.userId
-        })
-        .execute();
-    });
+        await trx
+          .insertInto("user_identities")
+          .values({
+            created_at: identity.createdAt,
+            email: identity.email,
+            id: identity.id,
+            provider: identity.provider,
+            provider_user_id: identity.providerUserId,
+            user_id: identity.userId
+          })
+          .execute();
+      });
 
-    return {
-      ...user,
-      identities: [identity]
-    };
+      return {
+        ...user,
+        identities: [identity]
+      };
+    } catch (error) {
+      // Handle race condition where another request created the user concurrently
+      if (
+        error instanceof Error &&
+        (error.message.includes("duplicate key") || (error as { code?: string }).code === "23505")
+      ) {
+        const existing = await this.findUserByIdentity(input.provider, input.providerUserId);
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
   }
 
   async updateUser(user: Pick<User, "email" | "handle" | "id" | "name">): Promise<User> {
