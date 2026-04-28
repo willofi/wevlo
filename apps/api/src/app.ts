@@ -412,7 +412,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
 
   const requireWorkspaceAction = (
     reply: FastifyReply,
-    membership: { role: "Owner" | "Member" } | null,
+    membership: { role: WorkspaceRole } | null,
     action: "workspace.view" | "workspace.invite" | "workspace.manage",
     deniedMessage: string
   ) => {
@@ -2443,7 +2443,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
 
   app.put("/workspaces/:workspaceSlug/members/:userId", async (request, reply) => {
     const params = request.params as { userId: string; workspaceSlug: string };
-    const payload = z.object({ role: z.enum(["Owner", "Member"]) }).parse(request.body);
+    const payload = z.object({ role: workspaceRoleSchema }).parse(request.body);
     const currentUser = await resolveCurrentUser(request);
     const { membership, workspace } = await resolveWorkspaceAccess(currentUser.id, params.workspaceSlug);
 
@@ -2455,14 +2455,55 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return;
     }
 
+    const workspaceRoleHierarchy: Record<WorkspaceRole, number> = {
+      Owner: 0,
+      Maintainer: 1,
+      Member: 2,
+      Developer: 3,
+      Guest: 4
+    };
+
+    const members = await listWorkspaceMembersUseCase(identityRepository, workspace.id);
+    const targetMember = members.find((m) => m.userId === params.userId);
+
+    if (!targetMember) {
+      return sendError(reply, 404, "member.not_found", "Member not found");
+    }
+
+    // 1. Singleton Owner Rule: Cannot promote someone to Owner via this route
+    if (payload.role === "Owner" && targetMember.role !== "Owner") {
+      return sendError(reply, 403, "workspace.forbidden", "Owner role is restricted and cannot be granted manually");
+    }
+
+    // 2. Prevent demoting the singleton Owner
+    if (targetMember.role === "Owner" && payload.role !== "Owner") {
+      return sendError(reply, 403, "workspace.forbidden", "The workspace owner cannot be demoted");
+    }
+
+    // 3. Hierarchy Rule: Maintainers (and others) cannot manage Owners or peers
+    if (
+      membership.role !== "Owner" &&
+      workspaceRoleHierarchy[targetMember.role] <= workspaceRoleHierarchy[membership.role]
+    ) {
+      return sendError(reply, 403, "workspace.forbidden", "You cannot modify a member with a role higher or equal to your own");
+    }
+
+    // 4. Hierarchy Rule: Cannot grant a role higher or equal to your own
+    if (
+      membership.role !== "Owner" &&
+      workspaceRoleHierarchy[payload.role] <= workspaceRoleHierarchy[membership.role]
+    ) {
+      return sendError(reply, 403, "workspace.forbidden", "You cannot grant a role higher or equal to your own");
+    }
+
     await updateWorkspaceMemberUseCase(identityRepository, {
       role: payload.role,
       userId: params.userId,
       workspaceId: workspace.id
     });
 
-    const members = await listWorkspaceMembersUseCase(identityRepository, workspace.id);
-    const updatedMember = members.find((m) => m.userId === params.userId);
+    const updatedMembers = await listWorkspaceMembersUseCase(identityRepository, workspace.id);
+    const updatedMember = updatedMembers.find((m) => m.userId === params.userId);
     return reply.send(updatedMember);
   });
 
@@ -2479,24 +2520,32 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return;
     }
 
-    const projectRoleHierarchy: Record<ProjectRole, number> = {
+    const workspaceRoleHierarchy: Record<WorkspaceRole, number> = {
       Owner: 0,
       Maintainer: 1,
-      Developer: 2,
-      Planner: 3,
+      Member: 2,
+      Developer: 3,
       Guest: 4
     };
 
-    const existingMembers = await listProjectMembersUseCase(projectCollaborationRepository, project.id);
-    const targetMember = existingMembers.find((m) => m.userId === params.userId);
+    const members = await listWorkspaceMembersUseCase(identityRepository, workspace.id);
+    const targetMember = members.find((m) => m.userId === params.userId);
 
-    // Enforcement: Cannot remove a member with a role higher or equal to your own (except Owners)
+    if (!targetMember) {
+      return sendError(reply, 404, "member.not_found", "Member not found");
+    }
+
+    // 1. Singleton Owner Rule: Cannot remove the Owner
+    if (targetMember.role === "Owner") {
+      return sendError(reply, 403, "workspace.forbidden", "The workspace owner cannot be removed");
+    }
+
+    // 2. Hierarchy Rule: Maintainers (and others) cannot remove Owners or peers
     if (
-      targetMember &&
-      project.currentUserRole !== "Owner" &&
-      projectRoleHierarchy[targetMember.role] <= projectRoleHierarchy[project.currentUserRole]
+      membership.role !== "Owner" &&
+      workspaceRoleHierarchy[targetMember.role] <= workspaceRoleHierarchy[membership.role]
     ) {
-      return sendError(reply, 403, "project.forbidden", "Cannot remove a member with a role higher or equal to your own");
+      return sendError(reply, 403, "workspace.forbidden", "You cannot remove a member with a role higher or equal to your own");
     }
 
     if (params.userId === currentUser.id) {

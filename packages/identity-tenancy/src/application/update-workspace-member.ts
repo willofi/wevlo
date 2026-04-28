@@ -1,11 +1,13 @@
+import type { WorkspaceRole } from "@wevlo/contracts";
+
 export type UpdateWorkspaceMemberRepository = {
-  updateMember: (workspaceId: string, userId: string, role: "Owner" | "Member") => Promise<void>;
+  updateMember: (workspaceId: string, userId: string, role: WorkspaceRole) => Promise<void>;
 };
 
 export const updateWorkspaceMemberUseCase = async (
   repository: UpdateWorkspaceMemberRepository,
   input: {
-    role: "Owner" | "Member";
+    role: WorkspaceRole;
     userId: string;
     workspaceId: string;
   }

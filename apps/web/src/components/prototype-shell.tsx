@@ -106,11 +106,17 @@ export function PrototypeShell({
                         </div>
                       </Link>
                     ))}
-                    
+                  </div>
+                </section>
+                <section>
+                  <div className="px-2 text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                    Team
+                  </div>
+                  <div className="mt-1 grid gap-0.5">
                     <button
                       type="button"
                       onClick={() => setIsInviteDialogOpen(true)}
-                      className="mt-1 flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground group"
+                      className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground group"
                     >
                       <UserPlus className="size-3.5 transition-colors group-hover:text-primary" />
                       Invite people

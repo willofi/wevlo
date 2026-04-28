@@ -107,8 +107,8 @@ const mapWorkspaceInvitationRow = (row: {
   workspaceId: row.workspace_id
 });
 
-const toWorkspaceMembershipRole = (role: WorkspaceInvitationDto["role"]): WorkspaceMembership["role"] => {
-  return role === "Owner" ? "Owner" : "Member";
+const toWorkspaceMembershipRole = (role: WorkspaceRole): WorkspaceRole => {
+  return role;
 };
 
 export class PostgresIdentityRepository {
@@ -558,7 +558,7 @@ export class PostgresIdentityRepository {
       .execute();
   }
 
-  async updateMember(workspaceId: string, userId: string, role: "Owner" | "Member"): Promise<void> {
+  async updateMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void> {
     await this.database
       .updateTable("workspace_memberships")
       .set({ role })

@@ -8,7 +8,7 @@ declare module "next-auth" {
       id: string;
       provider: "dev" | "google";
       providerUserId: string;
-      role: "Owner" | "Member";
+      role: WorkspaceRole;
       workspaceSlugs: string[];
     };
   }
@@ -19,7 +19,7 @@ declare module "next-auth/jwt" {
     defaultWorkspaceSlug?: string | null;
     provider?: "dev" | "google";
     providerUserId?: string;
-    role?: "Owner" | "Member";
+    role?: WorkspaceRole;
     userId?: string;
     workspaceSlugs?: string[];
   }

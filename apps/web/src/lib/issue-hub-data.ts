@@ -865,7 +865,7 @@ export const createWorkspaceInvitation = async (
   workspaceSlug: string,
   payload: {
     email?: string;
-    role: "Owner" | "Member";
+    role: WorkspaceRole;
     userId?: string;
   }
 ): Promise<WorkspaceInvitationDto> => {
@@ -885,7 +885,7 @@ export const updateWorkspaceMember = async (
   workspaceSlug: string,
   userId: string,
   payload: {
-    role: "Owner" | "Member";
+    role: WorkspaceRole;
   }
 ): Promise<WorkspaceMemberDto> => {
   const member = await requestJson<WorkspaceMemberDto>(`/workspaces/${workspaceSlug}/members/${encodeURIComponent(userId)}`, {

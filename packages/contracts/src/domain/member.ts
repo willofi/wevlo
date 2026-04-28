@@ -3,7 +3,7 @@ import { z } from "zod";
 import { projectRoleSchema } from "./project-role";
 import { userSchema } from "./user";
 
-export const workspaceRoleSchema = z.enum(["Owner", "Member"]);
+export const workspaceRoleSchema = z.enum(["Owner", "Maintainer", "Developer", "Member", "Guest"]);
 
 export const workspaceMemberSchema = z.object({
   workspaceId: z.string(),

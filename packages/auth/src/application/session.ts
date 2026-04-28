@@ -1,10 +1,10 @@
-import type { AuthProvider } from "@wevlo/contracts";
+import type { AuthProvider, WorkspaceRole } from "@wevlo/contracts";
 
 export type DemoUser = {
   id: string;
   name: string;
   email: string;
-  role: "Owner" | "Member";
+  role: WorkspaceRole;
   workspaceSlugs: string[];
   defaultWorkspaceSlug: string | null;
 };

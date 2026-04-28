@@ -15,7 +15,10 @@ export type AuthorizationAction = WorkspaceAction | ProjectAction;
 
 const workspaceGrants: Record<WorkspaceRole, WorkspaceAction[]> = {
   Owner: ["workspace.view", "workspace.invite", "workspace.manage"],
-  Member: ["workspace.view"]
+  Maintainer: ["workspace.view", "workspace.invite", "workspace.manage"],
+  Developer: ["workspace.view"],
+  Member: ["workspace.view", "workspace.invite"],
+  Guest: ["workspace.view"]
 };
 
 const projectGrants: Record<ProjectRole, ProjectAction[]> = {
