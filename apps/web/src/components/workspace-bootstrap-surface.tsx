@@ -13,6 +13,7 @@ import { getWorkspaceHref } from "@/lib/issue-hub-data";
 
 type WorkspaceBootstrapSurfaceProps = {
   viewer: {
+    avatarUrl?: string | null;
     email?: string | null;
     name: string;
   };

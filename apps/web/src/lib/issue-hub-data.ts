@@ -37,11 +37,13 @@ import type {
   UpdateProfileRequest,
   UpdateIssueSubscriptionRequest,
   UpdateIssueRequest,
-  WorkspaceInvitationDto,
-  WorkspaceMemberDto,
   WorkspaceDto,
+  WorkspaceInvitationDto,
+  WorkspaceInvitationResult,
+  WorkspaceMemberDto,
+  WorkspaceRole,
   WorkspaceSummaryDto
-} from "@wevlo/contracts";
+  } from "@wevlo/contracts";
 import {
   buildLoginHref,
   demoUsers,
@@ -68,7 +70,7 @@ const requestJson = async <TResponse>(
     ...(init?.headers as Record<string, string>)
   };
 
-  if (init?.body && !headers["content-type"]) {
+  if (init?.body && !(init.body instanceof FormData) && !headers["content-type"]) {
     headers["content-type"] = "application/json";
   }
 
@@ -131,6 +133,34 @@ export const updateProfile = async (payload: UpdateProfileRequest): Promise<MeDt
 
   if (!user) {
     throw new Error("Profile update returned no payload");
+  }
+
+  return user;
+};
+
+export const uploadProfileAvatar = async (file: File): Promise<MeDto["user"]> => {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const user = await requestJson<MeDto["user"]>("/me/profile/avatar", {
+    body: formData,
+    method: "POST"
+  });
+
+  if (!user) {
+    throw new Error("Profile image upload returned no payload");
+  }
+
+  return user;
+};
+
+export const removeProfileAvatar = async (): Promise<MeDto["user"]> => {
+  const user = await requestJson<MeDto["user"]>("/me/profile/avatar", {
+    method: "DELETE"
+  });
+
+  if (!user) {
+    throw new Error("Profile image removal returned no payload");
   }
 
   return user;
@@ -865,20 +895,21 @@ export const createWorkspaceInvitation = async (
   workspaceSlug: string,
   payload: {
     email?: string;
+    emails?: string[];
     role: WorkspaceRole;
     userId?: string;
   }
-): Promise<WorkspaceInvitationDto> => {
-  const invitation = await requestJson<WorkspaceInvitationDto>(`/workspaces/${workspaceSlug}/invitations`, {
+): Promise<WorkspaceInvitationResult[]> => {
+  const response = await requestJson<{ results: WorkspaceInvitationResult[] }>(`/workspaces/${workspaceSlug}/invitations`, {
     body: JSON.stringify(payload),
     method: "POST"
   });
 
-  if (!invitation) {
+  if (!response) {
     throw new Error("Invitation creation returned no payload");
   }
 
-  return invitation;
+  return response.results;
 };
 
 export const updateWorkspaceMember = async (

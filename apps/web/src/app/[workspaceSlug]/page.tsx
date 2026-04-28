@@ -41,6 +41,7 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     <WorkspaceProjectsSurface
       projects={projects}
       viewer={{
+        avatarUrl: me.user.avatarUrl,
         email: me.user.email,
         name: me.user.name
       }}

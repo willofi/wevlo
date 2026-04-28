@@ -17,11 +17,23 @@ export const createWorkspaceInvitationRequestSchema = z
   .object({
     userId: z.string().min(1).optional(),
     email: z.string().email().optional(),
+    emails: z.array(z.string()).min(1).optional(),
     role: workspaceRoleSchema
   })
-  .refine((value) => Boolean(value.userId || value.email), {
-    message: "userId or email is required"
+  .refine((value) => Boolean(value.userId || value.email || value.emails), {
+    message: "userId, email, or emails is required"
   });
+
+export const workspaceInvitationResultSchema = z.object({
+  email: z.string().min(1),
+  invitationId: z.string().nullable(),
+  reason: z.string().nullable(),
+  status: z.enum(["created", "already_member", "failed"])
+});
+
+export const createWorkspaceInvitationsResponseSchema = z.object({
+  results: z.array(workspaceInvitationResultSchema)
+});
 
 export const createProjectInvitationRequestSchema = z
   .object({
@@ -37,6 +49,8 @@ export type CreateWorkspaceMemberRequest = z.infer<typeof createWorkspaceMemberR
 export type CreateProjectMemberRequest = z.infer<typeof createProjectMemberRequestSchema>;
 export type CreateWorkspaceInvitationRequest = z.infer<typeof createWorkspaceInvitationRequestSchema>;
 export type CreateProjectInvitationRequest = z.infer<typeof createProjectInvitationRequestSchema>;
+export type WorkspaceInvitationResult = z.infer<typeof workspaceInvitationResultSchema>;
+export type CreateWorkspaceInvitationsResponse = z.infer<typeof createWorkspaceInvitationsResponseSchema>;
 
 export const workspaceInvitationRequestSchema = createWorkspaceInvitationRequestSchema;
 export const projectInvitationRequestSchema = createProjectInvitationRequestSchema;

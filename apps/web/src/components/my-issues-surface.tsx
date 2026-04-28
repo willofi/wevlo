@@ -15,6 +15,7 @@ type MyIssuesSurfaceProps = {
   initialTab?: MyIssuesTab;
   initialWorkspaceSlug?: string;
   viewer: {
+    avatarUrl?: string | null;
     email?: string | null;
     name: string;
   };

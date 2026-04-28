@@ -17,9 +17,16 @@ describe("collaboration contracts", () => {
     expect(
       createWorkspaceInvitationRequestSchema.safeParse({
         email: "member@example.com",
-        role: "Maintainer"
+        role: "Planner"
       }).success
     ).toBe(false);
+
+    expect(
+      createWorkspaceInvitationRequestSchema.safeParse({
+        emails: ["member@example.com", "member2@example.com"],
+        role: "Member"
+      }).success
+    ).toBe(true);
   });
 
   it("keeps project invitations restricted to project roles", () => {

@@ -1,4 +1,4 @@
-import type { UserDto, WorkspaceInvitationDto, WorkspaceMemberDto } from "@wevlo/contracts";
+import type { UserDto, WorkspaceInvitationDto, WorkspaceMemberDto, WorkspaceRole } from "@wevlo/contracts";
 import type { WorkspaceId } from "@wevlo/core";
 import { sql, type DatabaseExecutor } from "@wevlo/data-access";
 
@@ -20,13 +20,19 @@ import {
 } from "../domain/workspace-invitation";
 
 const mapUserRow = (row: {
+  avatar_content_type: string | null;
+  avatar_storage_key: string | null;
+  avatar_url: string | null;
   created_at: string;
   email: string | null;
   handle: string;
   id: string;
   name: string;
   updated_at: string;
-}): Omit<UserDto, "identities"> => ({
+}): Omit<User, "identities"> => ({
+  avatarContentType: row.avatar_content_type,
+  avatarStorageKey: row.avatar_storage_key,
+  avatarUrl: row.avatar_url,
   createdAt: row.created_at,
   email: row.email,
   handle: row.handle,
@@ -107,12 +113,27 @@ const mapWorkspaceInvitationRow = (row: {
   workspaceId: row.workspace_id
 });
 
-const toWorkspaceMembershipRole = (role: WorkspaceRole): WorkspaceRole => {
-  return role;
-};
-
 export class PostgresIdentityRepository {
   constructor(private readonly database: DatabaseExecutor) {}
+
+  private async grantWorkspaceProjectVisibility(
+    executor: DatabaseExecutor,
+    workspaceId: string,
+    userId: string,
+    createdAt: string
+  ): Promise<void> {
+    await sql`
+      insert into project_memberships (created_at, project_id, role, user_id)
+      select ${createdAt}, projects.id, 'Guest', ${userId}
+      from projects
+      where projects.workspace_id = ${workspaceId}
+      on conflict (project_id, user_id) do nothing
+    `.execute(executor);
+  }
+
+  async findUserById(userId: string): Promise<User | null> {
+    return hydrateUser(this.database, userId);
+  }
 
   async isHandleAvailable(handle: string, excludeUserId?: string): Promise<boolean> {
     const normalizedHandle = normalizeUserHandle(handle);
@@ -149,10 +170,6 @@ export class PostgresIdentityRepository {
     return candidate;
   }
 
-  async findUserById(userId: string): Promise<User | null> {
-    return hydrateUser(this.database, userId);
-  }
-
   async findUserByEmail(email: string): Promise<User | null> {
     const row = await this.database
       .selectFrom("users")
@@ -185,14 +202,91 @@ export class PostgresIdentityRepository {
     return hydrateUser(this.database, identityRow.user_id);
   }
 
+  async upsertIdentityForUser(input: {
+    email?: string | null;
+    provider: UserDto["identities"][number]["provider"];
+    providerUserId: string;
+    userId: string;
+  }): Promise<User> {
+    const existingIdentity = await this.database
+      .selectFrom("user_identities")
+      .selectAll()
+      .where("provider", "=", input.provider)
+      .where("provider_user_id", "=", input.providerUserId)
+      .executeTakeFirst();
+
+    if (existingIdentity) {
+      const nextEmail = input.email ?? existingIdentity.email;
+
+      if (existingIdentity.user_id !== input.userId || existingIdentity.email !== nextEmail) {
+        await this.database
+          .updateTable("user_identities")
+          .set({
+            email: nextEmail,
+            user_id: input.userId
+          })
+          .where("id", "=", existingIdentity.id)
+          .execute();
+      }
+    } else {
+      const identity = createUserIdentity({
+        email: input.email ?? null,
+        provider: input.provider,
+        providerUserId: input.providerUserId,
+        userId: input.userId
+      });
+
+      await this.database
+        .insertInto("user_identities")
+        .values({
+          created_at: identity.createdAt,
+          email: identity.email,
+          id: identity.id,
+          provider: identity.provider,
+          provider_user_id: identity.providerUserId,
+          user_id: identity.userId
+        })
+        .execute();
+    }
+
+    if (input.email) {
+      const nextUserEmail = input.email;
+
+      await this.database
+        .updateTable("users")
+        .set({
+          email: nextUserEmail,
+          updated_at: new Date().toISOString()
+        })
+        .where("id", "=", input.userId)
+        .where((eb) => eb.or([
+          eb("email", "is", null),
+          eb("email", "=", nextUserEmail)
+        ]))
+        .execute();
+    }
+
+    const hydrated = await hydrateUser(this.database, input.userId);
+
+    if (!hydrated) {
+      throw new Error(`User not found after identity upsert: ${input.userId}`);
+    }
+
+    return hydrated;
+  }
+
   async createUserWithIdentity(input: {
+    avatarUrl?: string | null;
     email?: string | null;
     name: string;
     provider: UserDto["identities"][number]["provider"];
     providerUserId: string;
   }): Promise<User> {
-    const handle = await this.generateAvailableHandle(input.name);
+    const fallbackName = input.name.trim().length > 0 ? input.name : (input.email?.split("@")[0] ?? "user");
+    const handle = await this.generateAvailableHandle(fallbackName);
     const user = createUser({
+      avatarContentType: null,
+      avatarUrl: input.avatarUrl ?? null,
       email: input.email ?? null,
       handle,
       name: input.name
@@ -209,6 +303,9 @@ export class PostgresIdentityRepository {
         await trx
           .insertInto("users")
           .values({
+            avatar_content_type: user.avatarContentType,
+            avatar_storage_key: user.avatarStorageKey,
+            avatar_url: user.avatarUrl,
             created_at: user.createdAt,
             email: user.email,
             handle: user.handle,
@@ -250,7 +347,7 @@ export class PostgresIdentityRepository {
     }
   }
 
-  async updateUser(user: Pick<User, "email" | "handle" | "id" | "name">): Promise<User> {
+  async updateUser(user: Pick<User, "avatarContentType" | "avatarStorageKey" | "avatarUrl" | "email" | "handle" | "id" | "name">): Promise<User> {
     const nextHandle = user.handle ?? normalizeUserHandle(user.name);
 
     if (!isUserHandleValid(nextHandle)) {
@@ -264,6 +361,9 @@ export class PostgresIdentityRepository {
     await this.database
       .updateTable("users")
       .set({
+        avatar_content_type: user.avatarContentType,
+        avatar_storage_key: user.avatarStorageKey,
+        avatar_url: user.avatarUrl,
         email: user.email,
         handle: nextHandle,
         name: user.name,
@@ -307,7 +407,7 @@ export class PostgresIdentityRepository {
       })
     );
 
-    return members.filter((member): member is WorkspaceMemberDto => member !== null);
+    return members.filter((member): member is NonNullable<typeof member> => member !== null);
   }
 
   async listMembershipsForUser(userId: string): Promise<WorkspaceMemberDto[]> {
@@ -351,20 +451,24 @@ export class PostgresIdentityRepository {
       workspaceId: input.workspaceId as WorkspaceId
     };
 
-    await this.database
-      .insertInto("workspace_memberships")
-      .values({
-        created_at: membership.createdAt,
-        role: membership.role,
-        user_id: membership.userId,
-        workspace_id: membership.workspaceId
-      })
-      .onConflict((conflict) =>
-        conflict.columns(["workspace_id", "user_id"]).doUpdateSet({
-          role: membership.role
+    await this.database.transaction().execute(async (trx) => {
+      await trx
+        .insertInto("workspace_memberships")
+        .values({
+          created_at: membership.createdAt,
+          role: membership.role,
+          user_id: membership.userId,
+          workspace_id: membership.workspaceId
         })
-      )
-      .execute();
+        .onConflict((conflict) =>
+          conflict.columns(["workspace_id", "user_id"]).doUpdateSet({
+            role: membership.role
+          })
+        )
+        .execute();
+
+      await this.grantWorkspaceProjectVisibility(trx, membership.workspaceId, membership.userId, membership.createdAt);
+    });
 
     return {
       createdAt: membership.createdAt,
@@ -506,7 +610,7 @@ export class PostgresIdentityRepository {
         .insertInto("workspace_memberships")
         .values({
           created_at: nextInvitation.acceptedAt ?? new Date().toISOString(),
-          role: nextInvitation.projectId ? "Member" : toWorkspaceMembershipRole(nextInvitation.role),
+          role: nextInvitation.projectId ? "Member" : (nextInvitation.role as WorkspaceRole),
           user_id: acceptedByUserId,
           workspace_id: nextInvitation.workspaceId
         })
@@ -524,6 +628,13 @@ export class PostgresIdentityRepository {
           })
           .onConflict((conflict) => conflict.columns(["project_id", "user_id"]).doNothing())
           .execute();
+      } else {
+        await this.grantWorkspaceProjectVisibility(
+          trx,
+          nextInvitation.workspaceId,
+          acceptedByUserId,
+          nextInvitation.acceptedAt ?? new Date().toISOString()
+        );
       }
     });
 
@@ -568,6 +679,9 @@ export class PostgresIdentityRepository {
   }
 
   async updateProfile(input: {
+    avatarContentType?: string | null;
+    avatarStorageKey?: string | null;
+    avatarUrl?: string | null;
     handle?: string;
     name?: string;
     userId: string;
@@ -579,10 +693,44 @@ export class PostgresIdentityRepository {
     }
 
     return this.updateUser({
+      avatarContentType: input.avatarContentType ?? currentUser.avatarContentType,
+      avatarStorageKey: input.avatarStorageKey ?? currentUser.avatarStorageKey,
+      avatarUrl: input.avatarUrl ?? currentUser.avatarUrl,
       email: currentUser.email,
       handle: input.handle ?? currentUser.handle,
       id: currentUser.id,
       name: input.name ?? currentUser.name
+    });
+  }
+
+  async syncUserProfileFromIdentity(input: {
+    avatarUrl?: string | null;
+    email?: string | null;
+    name?: string | null;
+    userId: string;
+  }): Promise<User> {
+    const currentUser = await this.findUserById(input.userId);
+
+    if (!currentUser) {
+      throw new Error(`User not found: ${input.userId}`);
+    }
+
+    const shouldUpdateEmail = Boolean(input.email && (!currentUser.email || currentUser.email === input.email));
+    const shouldUpdateName = Boolean(input.name && currentUser.name.trim().length === 0);
+    const shouldUpdateAvatar = Boolean(input.avatarUrl && !currentUser.avatarUrl && !currentUser.avatarStorageKey);
+
+    if (!shouldUpdateEmail && !shouldUpdateName && !shouldUpdateAvatar) {
+      return currentUser;
+    }
+
+    return this.updateUser({
+      avatarContentType: currentUser.avatarContentType,
+      avatarStorageKey: currentUser.avatarStorageKey,
+      avatarUrl: shouldUpdateAvatar ? input.avatarUrl ?? null : currentUser.avatarUrl,
+      email: shouldUpdateEmail ? input.email ?? null : currentUser.email,
+      handle: currentUser.handle,
+      id: currentUser.id,
+      name: shouldUpdateName ? input.name ?? currentUser.name : currentUser.name
     });
   }
 }

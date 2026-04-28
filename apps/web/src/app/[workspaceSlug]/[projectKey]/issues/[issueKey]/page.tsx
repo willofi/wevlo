@@ -49,6 +49,7 @@ export default async function IssueDetailPage({ params }: IssueDetailPageProps) 
       project={project}
       projects={projects}
       viewer={{
+        avatarUrl: me.user.avatarUrl,
         email: me.user.email ?? null,
         id: me.user.id,
         name: me.user.name

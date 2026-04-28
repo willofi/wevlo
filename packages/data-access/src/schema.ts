@@ -24,6 +24,9 @@ export type WorkspaceTable = {
 };
 
 export type UserTable = {
+  avatar_content_type: string | null;
+  avatar_storage_key: string | null;
+  avatar_url: string | null;
   id: string;
   name: string;
   handle: string;
@@ -342,6 +345,12 @@ export type SchemaMigrationTable = {
   applied_at: string;
 };
 
+export type VerificationTokenTable = {
+  identifier: string;
+  token: string;
+  expires: string;
+};
+
 export type DatabaseSchema = {
   audit_events: AuditEventTable;
   integration_installations: IntegrationInstallationTable;
@@ -369,6 +378,7 @@ export type DatabaseSchema = {
   sync_cursors: SyncCursorTable;
   user_identities: UserIdentityTable;
   users: UserTable;
+  verification_tokens: VerificationTokenTable;
   webhook_deliveries: WebhookDeliveryTable;
   workspace_invitations: WorkspaceInvitationTable;
   workspace_memberships: WorkspaceMembershipTable;

@@ -24,6 +24,7 @@ const hydrateUser = async (
     .execute();
 
   return {
+    avatarUrl: userRow.avatar_url,
     createdAt: userRow.created_at,
     email: userRow.email,
     handle: userRow.handle,
@@ -113,7 +114,7 @@ export class PostgresProjectCollaborationRepository {
       })
     );
 
-    return members.filter((member): member is ProjectMemberDto => member !== null);
+    return members.filter((member): member is NonNullable<typeof member> => member !== null);
   }
 
   async listMembershipsForUser(userId: string): Promise<ProjectMemberDto[]> {

@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import {
   Avatar,
   AvatarFallback,
+  AvatarImage,
   Button,
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ import {
 
 type AccountMenuProps = {
   align?: "center" | "end" | "start" | undefined;
+  avatarUrl?: string | null | undefined;
   email?: string | null | undefined;
   name: string;
   side?: "bottom" | "left" | "right" | "top" | undefined;
@@ -50,6 +52,7 @@ function initialsFromName(name: string) {
 
 export function AccountMenu({
   align = "end",
+  avatarUrl,
   email,
   name,
   side = "bottom",
@@ -84,6 +87,7 @@ export function AccountMenu({
               className="flex w-full items-center gap-3 rounded-xl px-2.5 py-1.5 text-left transition-colors hover:bg-sidebar-foreground/5"
             >
               <Avatar className="size-8 bg-transparent">
+                {avatarUrl ? <AvatarImage src={avatarUrl} alt={name} /> : null}
                 <AvatarFallback className="bg-primary text-[11px] font-semibold text-primary-foreground">
                   {initials}
                 </AvatarFallback>
@@ -106,7 +110,12 @@ export function AccountMenu({
               )}
               title={name}
             >
-              {initials}
+              <Avatar className={cn(trigger === "avatar" ? "size-10" : "size-9")}>
+                {avatarUrl ? <AvatarImage src={avatarUrl} alt={name} /> : null}
+                <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
             </button>
           )}
         </DropdownMenuTrigger>

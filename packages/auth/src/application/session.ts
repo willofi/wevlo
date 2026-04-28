@@ -10,6 +10,7 @@ export type DemoUser = {
 };
 
 export type Session = {
+  userAvatarUrl?: string | null;
   userId: string;
   userName: string;
   userEmail: string;
@@ -25,6 +26,7 @@ export type InternalAuthHeaders = {
   "x-wevlo-internal-token": string;
   "x-wevlo-auth-provider": AuthProvider;
   "x-wevlo-provider-user-id": string;
+  "x-wevlo-user-avatar-url"?: string;
   "x-wevlo-user-email": string;
   "x-wevlo-user-id": string;
   "x-wevlo-user-name": string;
@@ -78,16 +80,24 @@ export const getDemoUser = (userId: string): DemoUser | undefined => {
 };
 
 export const buildInternalAuthHeaders = (
-  session: Pick<Session, "provider" | "providerUserId" | "userEmail" | "userId" | "userName">,
+  session: Pick<Session, "provider" | "providerUserId" | "userAvatarUrl" | "userEmail" | "userId" | "userName">,
   internalToken: string
-): InternalAuthHeaders => ({
-  "x-wevlo-auth-provider": session.provider,
-  "x-wevlo-internal-token": internalToken,
-  "x-wevlo-provider-user-id": session.providerUserId,
-  "x-wevlo-user-email": session.userEmail,
-  "x-wevlo-user-id": session.userId,
-  "x-wevlo-user-name": session.userName
-});
+): InternalAuthHeaders => {
+  const headers: InternalAuthHeaders = {
+    "x-wevlo-auth-provider": session.provider,
+    "x-wevlo-internal-token": internalToken,
+    "x-wevlo-provider-user-id": session.providerUserId,
+    "x-wevlo-user-email": session.userEmail,
+    "x-wevlo-user-id": session.userId,
+    "x-wevlo-user-name": session.userName
+  };
+
+  if (session.userAvatarUrl) {
+    headers["x-wevlo-user-avatar-url"] = session.userAvatarUrl;
+  }
+
+  return headers;
+};
 
 export const isWorkspaceVisible = (session: Pick<Session, "workspaceSlugs">, workspaceSlug: string): boolean => {
   return session.workspaceSlugs.includes(workspaceSlug);

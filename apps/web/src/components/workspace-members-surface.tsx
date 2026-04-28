@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import type {
   WorkspaceDto,
+  WorkspaceInvitationResult,
   WorkspaceInvitationDto,
   WorkspaceMemberDto,
   WorkspaceRole
@@ -39,6 +40,22 @@ const roleHierarchy: Record<WorkspaceRole, number> = {
 
 const selectClassName =
   "flex h-10 w-full rounded-lg border border-input bg-background/70 px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring";
+
+const describeInviteFailure = (failure: WorkspaceInvitationResult): string => {
+  if (failure.reason === "invalid_email") {
+    return `${failure.email}: invalid email format`;
+  }
+  if (failure.reason === "email_send_failed") {
+    if (failure.invitationId) {
+      return `${failure.email}: invitation was created, but email delivery failed`;
+    }
+    return `${failure.email}: failed to send invitation email`;
+  }
+  if (failure.reason === "invite_create_failed") {
+    return `${failure.email}: failed to create invitation`;
+  }
+  return `${failure.email}: unknown error`;
+};
 
 export const WorkspaceMembersSurface = ({
   initialInvitations,
@@ -78,14 +95,29 @@ export const WorkspaceMembersSurface = ({
       setIsSaving(true);
       setError(null);
       setStatusMessage(null);
-      const invitation = await createWorkspaceInvitation(workspace.slug, {
-        email,
+      const emails = email
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+
+      const results = await createWorkspaceInvitation(workspace.slug, {
+        emails,
         role
       });
-      setInvitations((current) => [invitation, ...current]);
+      const createdCount = results.filter((result) => result.status === "created").length;
+      const alreadyMemberCount = results.filter((result) => result.status === "already_member").length;
+      const failures = results.filter((result) => result.status === "failed");
+      const failedCount = failures.length;
+
+      if (failedCount > 0) {
+        const failureSummary = failures.slice(0, 3).map(describeInviteFailure).join(" / ");
+        const hasMore = failures.length > 3 ? ` (+${failures.length - 3} more)` : "";
+        setError(`${failedCount} invitation(s) failed: ${failureSummary}${hasMore}`);
+      }
+
       setEmail("");
       setRole("Member");
-      setStatusMessage(`Invitation created for ${invitation.inviteeEmail ?? invitation.inviteeUserId ?? "the teammate"}.`);
+      setStatusMessage(`Created ${createdCount}, already members ${alreadyMemberCount}, failed ${failedCount}.`);
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : "Invitation failed");
     } finally {
@@ -138,8 +170,8 @@ export const WorkspaceMembersSurface = ({
             <Input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@company.com"
-              type="email"
+              placeholder="name@company.com, teammate@company.com"
+              type="text"
             />
             <select
               value={role}
@@ -160,6 +192,9 @@ export const WorkspaceMembersSurface = ({
             </Button>
             {error ? (
               <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
+            ) : null}
+            {statusMessage ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{statusMessage}</div>
             ) : null}
           </CardContent>
         </Card>

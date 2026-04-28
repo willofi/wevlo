@@ -22,6 +22,7 @@ import {
   createProjectRequestSchema,
   projectInvitationRequestSchema,
   createWorkspaceRequestSchema,
+  createWorkspaceInvitationsResponseSchema,
   type ErrorEnvelopeDto,
   handleAvailabilitySchema,
   issueSubscriptionResponseSchema,
@@ -39,7 +40,14 @@ import {
   updateIssueRequestSchema,
   sessionSchema,
   workspaceInvitationRequestSchema,
-  workspaceSummarySchema
+  workspaceSummarySchema,
+  workspaceRoleSchema,
+  createVerificationTokenRequestSchema,
+  verifyTokenRequestSchema,
+  createUserRequestSchema,
+  type WorkspaceRole,
+  type ProjectRole,
+  type WorkspaceInvitationResult
 } from "@wevlo/contracts";
 import type { Database, DatabaseExecutor } from "@wevlo/data-access";
 import { healthcheckDatabase, runInTransaction } from "@wevlo/data-access";
@@ -54,6 +62,7 @@ import {
   listVisibleWorkspacesUseCase,
   PostgresIdentityRepository,
   PostgresWorkspaceRepository,
+  PostgresAuthRepository,
   removeWorkspaceMemberUseCase,
   resolveCurrentUserUseCase,
   updateWorkspaceMemberUseCase,
@@ -126,6 +135,7 @@ import {
   buildWorkspaceInvitationAcceptedEvent,
   buildWorkspaceInvitationReceivedEvent
 } from "./notification-events.js";
+import { sendWorkspaceInviteEmail } from "./invite-email.js";
 
 export type ApiDependencies = {
   database: Database;
@@ -144,10 +154,38 @@ export const buildApi = ({ database }: ApiDependencies) => {
   const issueRepository = new PostgresIssueRepository(database);
   const integrationRepository = new PostgresIntegrationRepository(database);
   const notificationRepository = new PostgresNotificationRepository(database);
+  const authRepository = new PostgresAuthRepository(database);
   const attachmentStorage = createAttachmentStorageFromEnv();
+  const profileAvatarMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  const maxProfileAvatarBytes = 5 * 1024 * 1024;
+  const buildProfileAvatarUrl = (userId: string) => `/api/bff/users/${userId}/avatar`;
+  const webAppBaseUrl = (process.env.NEXTAUTH_URL ?? process.env.WEVLO_WEB_BASE_URL ?? "http://localhost:3000").trim();
+  const normalizeInviteEmails = (input: {
+    email?: string;
+    emails?: string[];
+  }): string[] => {
+    const candidates = [
+      ...(input.email ? input.email.split(",") : []),
+      ...(input.emails ?? []).flatMap((value) => value.split(","))
+    ];
+
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const value of candidates) {
+      const trimmed = value.trim().toLowerCase();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+
+    return normalized;
+  };
 
   const createScopedRepositories = (executor: DatabaseExecutor) => ({
     identityRepository: new PostgresIdentityRepository(executor),
+    authRepository: new PostgresAuthRepository(executor),
     integrationRepository: new PostgresIntegrationRepository(executor),
     issueRepository: new PostgresIssueRepository(executor),
     notificationRepository: new PostgresNotificationRepository(executor),
@@ -157,7 +195,8 @@ export const buildApi = ({ database }: ApiDependencies) => {
   const resolveCurrentUser = async (request: Parameters<typeof getRequestIdentity>[0]) => {
     const identity = getRequestIdentity(request);
     return resolveCurrentUserUseCase(identityRepository, {
-      email: identity.email,
+      ...(identity.avatarUrl !== undefined ? { avatarUrl: identity.avatarUrl } : {}),
+      ...(identity.email !== undefined ? { email: identity.email } : {}),
       name: identity.name,
       provider: identity.provider,
       providerUserId: identity.providerUserId
@@ -558,6 +597,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
 
     try {
       const updatedUser = await identityRepository.updateProfile({
+        ...(payload.avatarUrl !== undefined ? { avatarUrl: payload.avatarUrl } : {}),
         ...(payload.handle !== undefined ? { handle: payload.handle } : {}),
         ...(payload.name !== undefined ? { name: payload.name } : {}),
         userId: currentUser.id
@@ -571,6 +611,92 @@ export const buildApi = ({ database }: ApiDependencies) => {
 
       throw error;
     }
+  });
+
+  app.post("/me/profile/avatar", async (request, reply) => {
+    const currentUser = await resolveCurrentUser(request);
+    const upload = await request.file();
+
+    if (!upload) {
+      return sendError(reply, 400, "profile.avatar_required", "Profile image file is required");
+    }
+
+    const contentType = upload.mimetype.trim().toLowerCase();
+
+    if (!profileAvatarMimeTypes.has(contentType)) {
+      return sendError(reply, 400, "profile.avatar_invalid_type", "Profile image must be a PNG, JPG, WEBP, or GIF");
+    }
+
+    const buffer = await upload.toBuffer();
+
+    if (buffer.byteLength === 0) {
+      return sendError(reply, 400, "profile.avatar_empty", "Profile image file is empty");
+    }
+
+    if (buffer.byteLength > maxProfileAvatarBytes) {
+      return sendError(reply, 400, "profile.avatar_too_large", "Profile image must be 5 MB or smaller");
+    }
+
+    const stored = await attachmentStorage.put({
+      buffer,
+      contentType,
+      keyPrefix: `profiles/${currentUser.id}`
+    });
+
+    const previousStorageKey = currentUser.avatarStorageKey;
+
+    try {
+      const updatedUser = await identityRepository.updateProfile({
+        avatarContentType: contentType,
+        avatarStorageKey: stored.storageKey,
+        avatarUrl: buildProfileAvatarUrl(currentUser.id),
+        userId: currentUser.id
+      });
+
+      if (previousStorageKey && previousStorageKey !== stored.storageKey) {
+        await attachmentStorage.delete(previousStorageKey);
+      }
+
+      return reply.status(201).send(updatedUser);
+    } catch (error) {
+      await attachmentStorage.delete(stored.storageKey);
+      throw error;
+    }
+  });
+
+  app.delete("/me/profile/avatar", async (request, reply) => {
+    const currentUser = await resolveCurrentUser(request);
+    const previousStorageKey = currentUser.avatarStorageKey;
+
+    const updatedUser = await identityRepository.updateProfile({
+      avatarContentType: null,
+      avatarStorageKey: null,
+      avatarUrl: null,
+      userId: currentUser.id
+    });
+
+    if (previousStorageKey) {
+      await attachmentStorage.delete(previousStorageKey);
+    }
+
+    return reply.send(updatedUser);
+  });
+
+  app.get("/users/:userId/avatar", async (request, reply) => {
+    await resolveCurrentUser(request);
+    const params = request.params as { userId: string };
+    const user = await identityRepository.findUserById(params.userId);
+
+    if (!user?.avatarStorageKey) {
+      return sendError(reply, 404, "profile.avatar_not_found", "Profile image not found");
+    }
+
+    if (user.avatarContentType) {
+      reply.header("content-type", user.avatarContentType);
+    }
+
+    const avatarStream = await attachmentStorage.stream(user.avatarStorageKey);
+    return reply.send(avatarStream);
   });
 
   app.get("/me/issues", async (request, reply) => {
@@ -2396,49 +2522,145 @@ export const buildApi = ({ database }: ApiDependencies) => {
     if (requireWorkspaceAction(reply, membership, "workspace.invite", "Workspace invite denied")) {
       return;
     }
+    const inviteEmails = normalizeInviteEmails({
+      ...(payload.email ? { email: payload.email } : {}),
+      ...(payload.emails ? { emails: payload.emails } : {})
+    });
+    if (inviteEmails.length === 0 && payload.userId) {
+      const invitedUser = await identityRepository.findUserById(payload.userId);
+      if (invitedUser?.email) {
+        inviteEmails.push(invitedUser.email.trim().toLowerCase());
+      }
+    }
+    if (inviteEmails.length === 0) {
+      return sendError(reply, 400, "workspace.invite_invalid_target", "No valid invite targets were provided");
+    }
+    const emailSchema = z.string().email();
+    const results: WorkspaceInvitationResult[] = [];
 
-    const invitation = await runInTransaction(database, async (trx) => {
-      const scoped = createScopedRepositories(trx);
-      const createdInvitation = await createWorkspaceInvitationUseCase(scoped.identityRepository, {
-        inviteeEmail: payload.email ?? null,
-        inviteeUserId: payload.userId ?? null,
-        invitedByUserId: currentUser.id,
-        role: payload.role,
-        workspaceId: workspace.id
-      });
-      const recipientUserId =
-        createdInvitation.inviteeUserId ??
-        (createdInvitation.inviteeEmail
-          ? (await scoped.identityRepository.findUserByEmail(createdInvitation.inviteeEmail))?.id ?? null
-          : null);
-
-      if (recipientUserId) {
-        await scoped.notificationRepository.enqueueEvent(
-          buildWorkspaceInvitationReceivedEvent({
-            invitation: createdInvitation,
-            recipientUserId,
-            workspaceName: workspace.name,
-            workspaceSlug: workspace.slug
-          })
-        );
+    for (const email of inviteEmails) {
+      if (!emailSchema.safeParse(email).success) {
+        results.push({
+          email,
+          invitationId: null,
+          reason: "invalid_email",
+          status: "failed"
+        });
+        continue;
       }
 
-      return createdInvitation;
-    });
+      try {
+        const inviteResult = await runInTransaction(database, async (trx) => {
+          const scoped = createScopedRepositories(trx);
+          const existingUser = await scoped.identityRepository.findUserByEmail(email);
 
-    await recordAudit({
-      action: "workspace.invite",
-      actorId: currentUser.id,
-      payload: {
-        inviteeEmail: invitation.inviteeEmail,
-        invitationId: invitation.id,
-        role: invitation.role
-      },
-      resourceId: invitation.id,
-      workspaceId: workspace.id
-    });
+          if (existingUser) {
+            await scoped.identityRepository.createMember({
+              role: payload.role,
+              userId: existingUser.id,
+              workspaceId: workspace.id
+            });
 
-    return reply.status(201).send(invitation);
+            return {
+              email,
+              expiresAt: null as string | null,
+              invitationId: null as string | null,
+              inviteToken: null as string | null,
+              status: "already_member" as const
+            };
+          }
+
+          const createdInvitation = await createWorkspaceInvitationUseCase(scoped.identityRepository, {
+            inviteeEmail: email,
+            inviteeUserId: payload.userId ?? null,
+            invitedByUserId: currentUser.id,
+            role: payload.role,
+            workspaceId: workspace.id
+          });
+          const recipientUserId =
+            createdInvitation.inviteeUserId ??
+            (createdInvitation.inviteeEmail
+              ? (await scoped.identityRepository.findUserByEmail(createdInvitation.inviteeEmail))?.id ?? null
+              : null);
+
+          if (recipientUserId) {
+            await scoped.notificationRepository.enqueueEvent(
+              buildWorkspaceInvitationReceivedEvent({
+                invitation: createdInvitation,
+                recipientUserId,
+                workspaceName: workspace.name,
+                workspaceSlug: workspace.slug
+              })
+            );
+          }
+
+          await recordAudit({
+            action: "workspace.invite",
+            actorId: currentUser.id,
+            payload: {
+              inviteeEmail: createdInvitation.inviteeEmail,
+              invitationId: createdInvitation.id,
+              role: createdInvitation.role
+            },
+            resourceId: createdInvitation.id,
+            workspaceId: workspace.id
+          });
+
+          return {
+            email,
+            expiresAt: createdInvitation.expiresAt,
+            invitationId: createdInvitation.id,
+            inviteToken: createdInvitation.acceptToken,
+            status: "created" as const
+          };
+        });
+
+        const invitePathToken = inviteResult.inviteToken ?? inviteResult.invitationId;
+        const inviteUrl = invitePathToken ? `${webAppBaseUrl}/invite/${encodeURIComponent(invitePathToken)}` : `${webAppBaseUrl}/`;
+
+        try {
+          await sendWorkspaceInviteEmail({
+            expiresAt: inviteResult.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            inviteUrl,
+            role: payload.role,
+            to: email,
+            workspaceName: workspace.name
+          });
+        } catch (emailError) {
+          request.log.error(
+            { email, error: emailError instanceof Error ? emailError.message : String(emailError) },
+            "workspace invite email send failed"
+          );
+          results.push({
+            email,
+            invitationId: inviteResult.invitationId,
+            reason: "email_send_failed",
+            status: inviteResult.status
+          });
+          continue;
+        }
+
+        results.push({
+          email,
+          invitationId: inviteResult.invitationId,
+          reason: null,
+          status: inviteResult.status
+        });
+      } catch (error) {
+        request.log.error(
+          { email, error: error instanceof Error ? error.message : String(error) },
+          "workspace invite creation failed"
+        );
+        results.push({
+          email,
+          invitationId: null,
+          reason: "invite_create_failed",
+          status: "failed"
+        });
+      }
+    }
+
+    return reply.status(201).send(createWorkspaceInvitationsResponseSchema.parse({ results }));
   });
 
   app.put("/workspaces/:workspaceSlug/members/:userId", async (request, reply) => {
@@ -2451,7 +2673,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return sendError(reply, 404, "workspace.not_found", "Workspace not found");
     }
 
-    if (requireWorkspaceAction(reply, membership, "workspace.manage", "Workspace management denied")) {
+    if (!membership || requireWorkspaceAction(reply, membership, "workspace.manage", "Workspace management denied")) {
       return;
     }
 
@@ -2483,7 +2705,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
     // 3. Hierarchy Rule: Maintainers (and others) cannot manage Owners or peers
     if (
       membership.role !== "Owner" &&
-      workspaceRoleHierarchy[targetMember.role] <= workspaceRoleHierarchy[membership.role]
+      workspaceRoleHierarchy[targetMember.role as WorkspaceRole] <= workspaceRoleHierarchy[membership.role as WorkspaceRole]
     ) {
       return sendError(reply, 403, "workspace.forbidden", "You cannot modify a member with a role higher or equal to your own");
     }
@@ -2491,7 +2713,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
     // 4. Hierarchy Rule: Cannot grant a role higher or equal to your own
     if (
       membership.role !== "Owner" &&
-      workspaceRoleHierarchy[payload.role] <= workspaceRoleHierarchy[membership.role]
+      workspaceRoleHierarchy[payload.role as WorkspaceRole] <= workspaceRoleHierarchy[membership.role as WorkspaceRole]
     ) {
       return sendError(reply, 403, "workspace.forbidden", "You cannot grant a role higher or equal to your own");
     }
@@ -2516,7 +2738,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return sendError(reply, 404, "workspace.not_found", "Workspace not found");
     }
 
-    if (requireWorkspaceAction(reply, membership, "workspace.manage", "Workspace management denied")) {
+    if (!membership || requireWorkspaceAction(reply, membership, "workspace.manage", "Workspace management denied")) {
       return;
     }
 
@@ -2543,7 +2765,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
     // 2. Hierarchy Rule: Maintainers (and others) cannot remove Owners or peers
     if (
       membership.role !== "Owner" &&
-      workspaceRoleHierarchy[targetMember.role] <= workspaceRoleHierarchy[membership.role]
+      workspaceRoleHierarchy[targetMember.role as WorkspaceRole] <= workspaceRoleHierarchy[membership.role as WorkspaceRole]
     ) {
       return sendError(reply, 403, "workspace.forbidden", "You cannot remove a member with a role higher or equal to your own");
     }
@@ -3095,7 +3317,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
     // Enforcement: Cannot assign a role higher or equal to your own (except Owners)
     if (
       project.currentUserRole !== "Owner" &&
-      projectRoleHierarchy[payload.role] <= projectRoleHierarchy[project.currentUserRole]
+      projectRoleHierarchy[payload.role as ProjectRole] <= projectRoleHierarchy[project.currentUserRole as ProjectRole]
     ) {
       return sendError(reply, 403, "project.forbidden", "Cannot assign a role higher or equal to your own");
     }
@@ -3111,7 +3333,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
     if (
       targetMember &&
       project.currentUserRole !== "Owner" &&
-      projectRoleHierarchy[targetMember.role] <= projectRoleHierarchy[project.currentUserRole]
+      projectRoleHierarchy[targetMember.role as ProjectRole] <= projectRoleHierarchy[project.currentUserRole as ProjectRole]
     ) {
       return sendError(reply, 403, "project.forbidden", "Cannot modify a member with a role higher or equal to your own");
     }
@@ -3178,6 +3400,26 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return sendError(reply, 403, "project.forbidden", "Project member management denied");
     }
 
+    const projectRoleHierarchy: Record<ProjectRole, number> = {
+      Owner: 0,
+      Maintainer: 1,
+      Developer: 2,
+      Planner: 3,
+      Guest: 4
+    };
+
+    const existingMembers = await listProjectMembersUseCase(projectCollaborationRepository, project.id);
+    const targetMember = existingMembers.find((m) => m.userId === params.userId);
+
+    // Enforcement: Cannot remove a member with a role higher or equal to your own (except Owners)
+    if (
+      targetMember &&
+      project.currentUserRole !== "Owner" &&
+      projectRoleHierarchy[targetMember.role as ProjectRole] <= projectRoleHierarchy[project.currentUserRole as ProjectRole]
+    ) {
+      return sendError(reply, 403, "project.forbidden", "Cannot remove a member with a role higher or equal to your own");
+    }
+
     await removeProjectMemberUseCase(projectCollaborationRepository, {
       projectId: project.id,
       userId: params.userId
@@ -3195,6 +3437,73 @@ export const buildApi = ({ database }: ApiDependencies) => {
     });
 
     return reply.status(204).send();
+  });
+
+  // --- Internal Auth Endpoints (for NextAuth Adapter) ---
+
+  const validateInternalAuth = (request: any) => {
+    const token = request.headers["x-wevlo-internal-auth-token"];
+    if (!token || token !== process.env.WEVLO_INTERNAL_AUTH_TOKEN) {
+      throw new UnauthorizedError("Invalid internal auth token");
+    }
+  };
+
+  app.get("/internal/auth/users/by-email/:email", async (request, reply) => {
+    validateInternalAuth(request);
+    const params = request.params as { email: string };
+    const user = await identityRepository.findUserByEmail(params.email);
+    return user ? reply.send(user) : reply.status(404).send();
+  });
+
+  app.get("/internal/auth/users/:id", async (request, reply) => {
+    validateInternalAuth(request);
+    const params = request.params as { id: string };
+    const user = await identityRepository.findUserById(params.id);
+    return user ? reply.send(user) : reply.status(404).send();
+  });
+
+  app.post("/internal/auth/users", async (request, reply) => {
+    validateInternalAuth(request);
+    const payload = createUserRequestSchema.parse(request.body);
+
+    const existingByEmail = await identityRepository.findUserByEmail(payload.email);
+    if (existingByEmail) {
+      const linkedUser = await identityRepository.upsertIdentityForUser({
+        email: payload.email,
+        provider: "email",
+        providerUserId: payload.email,
+        userId: existingByEmail.id
+      });
+      return reply.send(linkedUser);
+    }
+
+    const existingByIdentity = await identityRepository.findUserByIdentity("email", payload.email);
+    if (existingByIdentity) {
+      return reply.send(existingByIdentity);
+    }
+
+    const user = await identityRepository.createUserWithIdentity({
+      email: payload.email,
+      name: payload.name ?? "",
+      provider: "email",
+      providerUserId: payload.email
+    });
+    
+    return reply.status(201).send(user);
+  });
+
+  app.post("/internal/auth/verification-tokens", async (request, reply) => {
+    validateInternalAuth(request);
+    const payload = createVerificationTokenRequestSchema.parse(request.body);
+    const token = await authRepository.createVerificationToken(payload);
+    return reply.status(201).send(token);
+  });
+
+  app.post("/internal/auth/verification-tokens/verify", async (request, reply) => {
+    validateInternalAuth(request);
+    const payload = verifyTokenRequestSchema.parse(request.body);
+    const token = await authRepository.useVerificationToken(payload.identifier, payload.token);
+    return token ? reply.send(token) : reply.status(404).send();
   });
 
   app.setErrorHandler((error, _request, reply) => {

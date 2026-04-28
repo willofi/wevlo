@@ -52,6 +52,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
       project={project}
       projects={projects}
       viewer={{
+        avatarUrl: me.user.avatarUrl,
         email: me.user.email,
         id: me.user.id,
         name: me.user.name

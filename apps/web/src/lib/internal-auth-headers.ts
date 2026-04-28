@@ -4,6 +4,7 @@ import type { AuthProvider } from "@wevlo/contracts";
 export type InternalAuthIdentity = {
   provider: AuthProvider;
   providerUserId: string;
+  userAvatarUrl?: string | null;
   userEmail: string;
   userId: string;
   userName: string;
@@ -17,6 +18,7 @@ export const buildApiInternalAuthHeaders = (
     {
       provider: identity.provider,
       providerUserId: identity.providerUserId,
+      ...(identity.userAvatarUrl !== undefined ? { userAvatarUrl: identity.userAvatarUrl } : {}),
       userEmail: identity.userEmail,
       userId: identity.userId,
       userName: identity.userName

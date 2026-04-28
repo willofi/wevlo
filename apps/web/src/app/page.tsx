@@ -19,6 +19,7 @@ export default async function Page() {
   return (
     <WorkspaceBootstrapSurface
       viewer={{
+        avatarUrl: me.user.avatarUrl,
         email: me.user.email,
         name: me.user.name
       }}

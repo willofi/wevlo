@@ -14,6 +14,23 @@ import {
   Input
 } from "@wevlo/ui-web";
 import { createWorkspaceInvitation } from "@/lib/issue-hub-data";
+import type { WorkspaceInvitationResult } from "@wevlo/contracts";
+
+const describeInviteFailure = (failure: WorkspaceInvitationResult): string => {
+  if (failure.reason === "invalid_email") {
+    return `${failure.email}: invalid email format`;
+  }
+  if (failure.reason === "email_send_failed") {
+    if (failure.invitationId) {
+      return `${failure.email}: invitation was created, but email delivery failed`;
+    }
+    return `${failure.email}: failed to send invitation email`;
+  }
+  if (failure.reason === "invite_create_failed") {
+    return `${failure.email}: failed to create invitation`;
+  }
+  return `${failure.email}: unknown error`;
+};
 
 export function InviteMemberDialog({
   workspaceSlug,
@@ -41,32 +58,27 @@ export function InviteMemberDialog({
     try {
       setIsSaving(true);
       setError(null);
+      const results = await createWorkspaceInvitation(workspaceSlug, {
+        emails,
+        role: "Member"
+      });
+      const failures = results.filter((result) => result.status === "failed");
 
-      const results = await Promise.allSettled(
-        emails.map((email) =>
-          createWorkspaceInvitation(workspaceSlug, {
-            email,
-            role: "Member"
-          })
-        )
-      );
-
-      const failures = results.filter((r) => r.status === "rejected");
-
-      if (failures.length > 0) {
-        setError(`${failures.length} invitation(s) failed. Please check the email addresses.`);
-        if (failures.length < emails.length) {
-          // Partial success
-          setSuccess(true);
-          setTimeout(() => setSuccess(false), 2000);
-        }
-      } else {
+      if (failures.length === 0) {
         setSuccess(true);
         setTimeout(() => {
           onOpenChange(false);
           setSuccess(false);
           setEmailInput("");
         }, 1500);
+      } else {
+        const failureSummary = failures.slice(0, 3).map(describeInviteFailure).join(" / ");
+        const hasMore = failures.length > 3 ? ` (+${failures.length - 3} more)` : "";
+        setError(`${failures.length} invitation(s) failed: ${failureSummary}${hasMore}`);
+        if (failures.length < results.length) {
+          setSuccess(true);
+          setTimeout(() => setSuccess(false), 2000);
+        }
       }
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : "Invitation failed");

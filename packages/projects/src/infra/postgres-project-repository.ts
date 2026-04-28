@@ -1,6 +1,6 @@
 import type { ProjectSummaryDto } from "@wevlo/contracts";
 import { normalizeProjectKey, type ProjectId, type ProjectKey, type WorkspaceId } from "@wevlo/core";
-import type { Database } from "@wevlo/data-access";
+import { sql, type Database } from "@wevlo/data-access";
 
 import type { ProjectLookupRepository } from "../application/get-project";
 import type { VisibleProjectRepository } from "../application/list-projects";
@@ -78,18 +78,26 @@ export class PostgresProjectRepository
     const normalizedProjectKey = normalizeProjectKey(projectKey);
     const row = await this.database
       .selectFrom("projects")
-      .innerJoin("project_memberships", "project_memberships.project_id", "projects.id")
+      .innerJoin("workspace_memberships", (join) =>
+        join
+          .onRef("workspace_memberships.workspace_id", "=", "projects.workspace_id")
+          .on("workspace_memberships.user_id", "=", userId)
+      )
+      .leftJoin("project_memberships", (join) =>
+        join
+          .onRef("project_memberships.project_id", "=", "projects.id")
+          .on("project_memberships.user_id", "=", userId)
+      )
       .select((expressionBuilder) => [
         "projects.id",
         "projects.name",
         "projects.project_key as key",
         "projects.visibility",
         "projects.workspace_id",
-        expressionBuilder.ref("project_memberships.role").as("current_user_role")
+        sql<ProjectSummaryDto["currentUserRole"]>`coalesce(${expressionBuilder.ref("project_memberships.role")}, 'Guest')`.as("current_user_role")
       ])
       .where("projects.workspace_id", "=", workspaceId)
       .where("projects.project_key", "=", normalizedProjectKey)
-      .where("project_memberships.user_id", "=", userId)
       .executeTakeFirst();
 
     return row ? mapProjectSummary(row) : null;
@@ -109,17 +117,25 @@ export class PostgresProjectRepository
   async listForUserInWorkspace(userId: string, workspaceId: string): Promise<ProjectSummaryDto[]> {
     const rows = await this.database
       .selectFrom("projects")
-      .innerJoin("project_memberships", "project_memberships.project_id", "projects.id")
+      .innerJoin("workspace_memberships", (join) =>
+        join
+          .onRef("workspace_memberships.workspace_id", "=", "projects.workspace_id")
+          .on("workspace_memberships.user_id", "=", userId)
+      )
+      .leftJoin("project_memberships", (join) =>
+        join
+          .onRef("project_memberships.project_id", "=", "projects.id")
+          .on("project_memberships.user_id", "=", userId)
+      )
       .select((expressionBuilder) => [
         "projects.id",
         "projects.name",
         "projects.project_key as key",
         "projects.visibility",
         "projects.workspace_id",
-        expressionBuilder.ref("project_memberships.role").as("current_user_role")
+        sql<ProjectSummaryDto["currentUserRole"]>`coalesce(${expressionBuilder.ref("project_memberships.role")}, 'Guest')`.as("current_user_role")
       ])
       .where("projects.workspace_id", "=", workspaceId)
-      .where("project_memberships.user_id", "=", userId)
       .orderBy("projects.created_at", "asc")
       .execute();
 

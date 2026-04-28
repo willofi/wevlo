@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 
 const defaultStorageDir = join(process.cwd(), ".wevlo-attachments");
@@ -15,6 +15,7 @@ export type AttachmentStorage = {
   put: (input: {
     buffer: Buffer;
     contentType: string;
+    keyPrefix?: string;
   }) => Promise<StoredAttachment>;
   stream: (storageKey: string) => Promise<NodeJS.ReadableStream>;
   delete: (storageKey: string) => Promise<void>;
@@ -26,12 +27,14 @@ export class LocalAttachmentStorage implements AttachmentStorage {
   async put(input: {
     buffer: Buffer;
     contentType: string;
+    keyPrefix?: string;
   }): Promise<StoredAttachment> {
     void input.contentType;
     await mkdir(this.storageDir, { recursive: true });
 
-    const storageKey = randomUUID();
+    const storageKey = input.keyPrefix ? `${input.keyPrefix}/${randomUUID()}` : randomUUID();
     const checksum = createHash("sha256").update(input.buffer).digest("hex");
+    await mkdir(dirname(join(this.storageDir, storageKey)), { recursive: true });
     await writeFile(join(this.storageDir, storageKey), input.buffer);
 
     return {

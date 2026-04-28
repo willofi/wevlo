@@ -2,20 +2,61 @@
 
 import React from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { getProviders, signIn } from "next-auth/react";
 import { Button, Input, Card, CardContent, CardHeader, CardTitle, CardDescription } from "@wevlo/ui-web";
 import { Logo } from "@/components/landing/logo";
+import { sanitizeReturnPath } from "@wevlo/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
+  const [emailEnabled, setEmailEnabled] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [formMessage, setFormMessage] = React.useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const callbackUrl = React.useMemo(
+    () => sanitizeReturnPath(searchParams.get("next")),
+    [searchParams]
+  );
+
+  React.useEffect(() => {
+    void getProviders().then((providers) => {
+      setEmailEnabled(Boolean(providers?.email));
+    });
+  }, []);
 
   const handleEmailLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    void signIn("email", { email, callbackUrl: "/" });
+    void (async () => {
+      setIsSubmitting(true);
+      setFormMessage(null);
+      try {
+        const normalizedEmail = email.trim().toLowerCase();
+        const statusResponse = await fetch(`/api/auth/email-status?email=${encodeURIComponent(normalizedEmail)}`, {
+          cache: "no-store"
+        });
+
+        if (!statusResponse.ok) {
+          setFormMessage("로그인을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.");
+          return;
+        }
+
+        const payload = (await statusResponse.json()) as { exists: boolean };
+
+        if (!payload.exists) {
+          setFormMessage("가입되지 않은 이메일이에요. 회원가입 페이지에서 먼저 가입해 주세요.");
+          return;
+        }
+
+        await signIn("email", { email: normalizedEmail, callbackUrl });
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
   };
 
   const handleDemoLogin = (userId: string) => {
-    void signIn("credentials", { userId, callbackUrl: "/" });
+    void signIn("credentials", { userId, callbackUrl });
   };
 
   return (
@@ -34,7 +75,7 @@ export default function LoginPage() {
           <Button 
             variant="outline" 
             className="w-full h-12 rounded-xl border-border/60 bg-background/50 hover:bg-secondary/80 transition-all flex items-center justify-center gap-3"
-            onClick={() => void signIn("google", { callbackUrl: "/" })}
+            onClick={() => void signIn("google", { callbackUrl })}
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -57,28 +98,41 @@ export default function LoginPage() {
             Continue with Google
           </Button>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border/40" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or sign in with email</span>
-            </div>
-          </div>
+          {emailEnabled ? (
+            <>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border/40" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or sign in with email</span>
+                </div>
+              </div>
 
-          <form onSubmit={handleEmailLogin} className="space-y-4">
-            <Input
-              type="email"
-              placeholder="name@example.com"
-              className="h-11 rounded-xl bg-background/50 border-border/60 focus:ring-primary/20"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Button type="submit" className="w-full h-11 rounded-xl font-semibold">
-              Sign in with Email
-            </Button>
-          </form>
+              <form onSubmit={handleEmailLogin} className="space-y-4">
+                <Input
+                  type="email"
+                  placeholder="name@example.com"
+                  className="h-11 rounded-xl bg-background/50 border-border/60 focus:ring-primary/20"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+                <Button type="submit" className="w-full h-11 rounded-xl font-semibold">
+                  {isSubmitting ? "Checking..." : "Sign in with Email"}
+                </Button>
+              </form>
+              {formMessage ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                  {formMessage}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="rounded-xl border border-border/50 bg-background/50 p-3 text-sm text-muted-foreground">
+              이메일 로그인은 아직 설정되지 않았어요. 현재는 Google 또는 Demo 로그인을 사용해 주세요.
+            </div>
+          )}
 
           <div className="pt-4 space-y-3">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">Demo Access</div>

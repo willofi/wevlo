@@ -815,6 +815,40 @@ const migrations: Migration[] = [
       on issue_comment_reactions(comment_id)
       `
     ]
+  },
+  {
+    name: "0015_verification_tokens",
+    statements: [
+      `
+      create table if not exists verification_tokens (
+        identifier text not null,
+        token text not null,
+        expires text not null,
+        primary key (identifier, token)
+      )
+      `,
+      `
+      create unique index if not exists idx_verification_tokens_token
+      on verification_tokens(token)
+      `
+    ]
+  },
+  {
+    name: "0016_user_avatars",
+    statements: [
+      `
+      alter table users
+      add column if not exists avatar_url text null
+      `,
+      `
+      alter table users
+      add column if not exists avatar_storage_key text null
+      `,
+      `
+      alter table users
+      add column if not exists avatar_content_type text null
+      `
+    ]
   }
 ];
 
@@ -895,6 +929,7 @@ export const truncateAllTables = async (database: Database): Promise<void> => {
       workspace_invitations,
       workspace_memberships,
       user_identities,
+      verification_tokens,
       users,
       workspaces
     restart identity cascade

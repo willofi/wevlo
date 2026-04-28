@@ -2,6 +2,7 @@ import { getMe, listWorkspaces } from "@/lib/server-api";
 
 export type AppShellData = {
   viewer: {
+    avatarUrl?: string | null;
     email?: string | null;
     name: string;
   };
@@ -13,6 +14,7 @@ export type AppShellData = {
 
 const defaultShellData: AppShellData = {
   viewer: {
+    avatarUrl: null,
     email: null,
     name: "Workspace member"
   },
@@ -27,6 +29,7 @@ export const getAppShellData = async (): Promise<AppShellData> => {
 
   return {
     viewer: {
+      avatarUrl: me.user.avatarUrl,
       email: me.user.email,
       name: me.user.name
     },

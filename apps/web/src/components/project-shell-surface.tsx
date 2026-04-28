@@ -25,6 +25,7 @@ type ProjectShellSurfaceProps = {
   project: ProjectSummaryDto;
   projects: ProjectSummaryDto[];
   viewer: {
+    avatarUrl?: string | null;
     email?: string | null;
     id: string;
     name: string;

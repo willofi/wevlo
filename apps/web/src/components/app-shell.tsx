@@ -24,6 +24,7 @@ type AppShellWorkspace = {
 };
 
 type AppShellViewer = {
+  avatarUrl?: string | null | undefined;
   email?: string | null | undefined;
   name: string;
 };
@@ -151,14 +152,14 @@ export function AppShell({
     () =>
       preferences.sidebarCollapsed ? (
         <div className="grid gap-2">
-          <AccountMenu align="start" email={viewer.email} name={viewer.name} side="right" trigger="collapsed" />
+          <AccountMenu align="start" avatarUrl={viewer.avatarUrl} email={viewer.email} name={viewer.name} side="right" trigger="collapsed" />
           <SidebarIconButton label="Expand sidebar" onClick={() => setPreference("sidebarCollapsed", false)}>
             <HiOutlineChevronDoubleRight className="size-4" />
           </SidebarIconButton>
         </div>
       ) : (
         <div className="space-y-1.5">
-          <AccountMenu align="start" email={viewer.email} name={viewer.name} side="top" trigger="sidebar" />
+          <AccountMenu align="start" avatarUrl={viewer.avatarUrl} email={viewer.email} name={viewer.name} side="top" trigger="sidebar" />
           <button
             type="button"
             onClick={() => setPreference("sidebarCollapsed", !preferences.sidebarCollapsed)}
@@ -169,7 +170,7 @@ export function AppShell({
           </button>
         </div>
       ),
-    [preferences.sidebarCollapsed, setPreference, viewer.email, viewer.name]
+    [preferences.sidebarCollapsed, setPreference, viewer.avatarUrl, viewer.email, viewer.name]
   );
 
   return (
@@ -263,7 +264,7 @@ export function AppShell({
                   </Link>
                 </Button>
               ) : null}
-              <UserMenu email={viewer.email} name={viewer.name} />
+              <UserMenu avatarUrl={viewer.avatarUrl} email={viewer.email} name={viewer.name} />
             </div>
             {isMobileNavOpen ? (
               <div className="max-h-[70vh] overflow-y-auto border-t border-border/70 bg-background px-4 py-4 lg:hidden">

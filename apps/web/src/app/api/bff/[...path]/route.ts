@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 
 import { authOptions } from "@/auth";
+import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
 import { buildApiInternalAuthHeaders } from "@/lib/internal-auth-headers";
-import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/runtime-env";
 
 type BffRouteContext = {
   params: Promise<{

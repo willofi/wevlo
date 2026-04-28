@@ -17,10 +17,11 @@ export const getCurrentAuthSession = async (): Promise<AppSession | null> => {
     issuedAt: new Date().toISOString(),
     provider: session.user.provider,
     providerUserId: session.user.providerUserId,
+    userAvatarUrl: session.user.avatarUrl,
     role: session.user.role,
     userEmail: session.user.email ?? "",
     userId: session.user.id,
-    userName: session.user.name ?? "Unknown user",
+    userName: session.user.name ?? "",
     workspaceSlugs: session.user.workspaceSlugs
   };
 };

@@ -37,11 +37,12 @@ export const handleAvailabilitySchema = z.object({
 
 export const updateProfileRequestSchema = z
   .object({
+    avatarUrl: userSchema.shape.avatarUrl.optional(),
     handle: userSchema.shape.handle.optional(),
-    name: userSchema.shape.name.optional()
+    name: z.string().trim().min(1).optional()
   })
-  .refine((value) => value.handle !== undefined || value.name !== undefined, {
-    message: "name or handle is required"
+  .refine((value) => value.avatarUrl !== undefined || value.handle !== undefined || value.name !== undefined, {
+    message: "name, handle, or avatarUrl is required"
   });
 
 export type HandleAvailabilityDto = z.infer<typeof handleAvailabilitySchema>;

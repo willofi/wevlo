@@ -20,6 +20,7 @@ type ShellWorkspace = {
 };
 
 type ShellViewer = {
+  avatarUrl?: string | null;
   email?: string | null;
   name: string;
 };
@@ -84,51 +85,53 @@ export function PrototypeShell({
             <div className="grid gap-5 px-2.5 py-3">
               <PersonalNav compact />
               {currentWorkspaceSlug ? (
-                <section>
-                  <div className="px-2 text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
-                    Projects
-                  </div>
-                  <div className="mt-1 grid gap-0.5">
-                    {projects.map((project) => (
-                      <Link
-                        key={project.id}
-                        href={`/${currentWorkspaceSlug}/${project.key}`}
-                        className={cn(
-                          "rounded-xl px-2 py-1.5 text-[13px] transition-colors",
-                          project.key === currentProjectKey
-                            ? "bg-sidebar-foreground/8 text-sidebar-foreground"
-                            : "text-muted-foreground hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground"
-                        )}
+                <>
+                  <section>
+                    <div className="px-2 text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                      Projects
+                    </div>
+                    <div className="mt-1 grid gap-0.5">
+                      {projects.map((project) => (
+                        <Link
+                          key={project.id}
+                          href={`/${currentWorkspaceSlug}/${project.key}`}
+                          className={cn(
+                            "rounded-xl px-2 py-1.5 text-[13px] transition-colors",
+                            project.key === currentProjectKey
+                              ? "bg-sidebar-foreground/8 text-sidebar-foreground"
+                              : "text-muted-foreground hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[11px] text-muted-foreground">{project.key}</span>
+                            <span className="truncate font-medium">{project.name}</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                  <section>
+                    <div className="px-2 text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                      Team
+                    </div>
+                    <div className="mt-1 grid gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsInviteDialogOpen(true)}
+                        className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground group"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[11px] text-muted-foreground">{project.key}</span>
-                          <span className="truncate font-medium">{project.name}</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-                <section>
-                  <div className="px-2 text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
-                    Team
-                  </div>
-                  <div className="mt-1 grid gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setIsInviteDialogOpen(true)}
-                      className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground group"
-                    >
-                      <UserPlus className="size-3.5 transition-colors group-hover:text-primary" />
-                      Invite people
-                    </button>
-                  </div>
-                </section>
+                        <UserPlus className="size-3.5 transition-colors group-hover:text-primary" />
+                        Invite people
+                      </button>
+                    </div>
+                  </section>
+                </>
               ) : null}
             </div>
           </ScrollArea>
 
           <div className="shrink-0 px-2.5 py-2.5">
-            <AccountMenu align="start" email={viewer.email} name={viewer.name} side="top" trigger="sidebar" />
+            <AccountMenu align="start" avatarUrl={viewer.avatarUrl} email={viewer.email} name={viewer.name} side="top" trigger="sidebar" />
             {footer ? <div className="mt-3">{footer}</div> : null}
           </div>
         </aside>

@@ -69,8 +69,9 @@ export class SupabaseS3AttachmentStorage implements AttachmentStorage {
   async put(input: {
     buffer: Buffer;
     contentType: string;
+    keyPrefix?: string;
   }): Promise<StoredAttachment> {
-    const storageKey = randomUUID();
+    const storageKey = input.keyPrefix ? `${input.keyPrefix}/${randomUUID()}` : randomUUID();
     const checksum = createHash("sha256").update(input.buffer).digest("hex");
 
     await this.client.send(

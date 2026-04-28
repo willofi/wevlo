@@ -6,6 +6,7 @@ import type { AuthProvider } from "@wevlo/contracts";
 import { UnauthorizedError } from "./errors.js";
 
 export type RequestIdentity = {
+  avatarUrl?: string | null;
   email: string | null;
   name: string;
   provider: AuthProvider;
@@ -25,23 +26,37 @@ const getSingleHeader = (value: string | string[] | undefined): string | null =>
   return null;
 };
 
+const getHeaderAllowEmpty = (value: string | string[] | undefined): string | null => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return null;
+};
+
 export const getRequestIdentity = (request: FastifyRequest): RequestIdentity => {
   const internalToken = getSingleHeader(request.headers["x-wevlo-internal-token"]);
 
   if (internalToken && internalToken === getInternalAuthToken()) {
     const provider = getSingleHeader(request.headers["x-wevlo-auth-provider"]);
     const providerUserId = getSingleHeader(request.headers["x-wevlo-provider-user-id"]);
-    const userName = getSingleHeader(request.headers["x-wevlo-user-name"]);
+    const userName = getHeaderAllowEmpty(request.headers["x-wevlo-user-name"]);
+    const userAvatarUrl = getSingleHeader(request.headers["x-wevlo-user-avatar-url"]);
     const userEmail = getSingleHeader(request.headers["x-wevlo-user-email"]);
     const userIdHint = getSingleHeader(request.headers["x-wevlo-user-id"]);
 
-    if (!provider || !providerUserId || !userName) {
+    if (!provider || !providerUserId || userName === null) {
       throw new UnauthorizedError("Incomplete internal auth headers");
     }
 
     return {
       email: userEmail,
       name: userName,
+      avatarUrl: userAvatarUrl,
       provider: provider as AuthProvider,
       providerUserId,
       userIdHint
@@ -55,6 +70,7 @@ export const getRequestIdentity = (request: FastifyRequest): RequestIdentity => 
     return {
       email: null,
       name: providerUserId,
+      avatarUrl: null,
       provider: "dev",
       providerUserId,
       userIdHint: null

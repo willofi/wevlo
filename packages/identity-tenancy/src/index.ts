@@ -15,3 +15,4 @@ export * from "./domain/user";
 export * from "./domain/workspace-invitation";
 export * from "./infra/postgres-workspace-repository";
 export * from "./infra/postgres-identity-repository";
+export * from "./infra/postgres-auth-repository";

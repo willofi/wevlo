@@ -3,6 +3,7 @@ import { z } from "zod";
 export const authProviderSchema = z.enum([
   "dev",
   "google",
+  "email",
   "github",
   "gitlab",
   "slack",
@@ -20,13 +21,14 @@ export const userIdentitySchema = z.object({
 
 export const userSchema = z.object({
   id: z.string(),
-  name: z.string().min(1),
+  name: z.string(),
   handle: z
     .string()
     .min(3)
     .max(32)
     .regex(/^[a-z0-9_]+$/),
   email: z.string().email().nullable(),
+  avatarUrl: z.string().min(1).nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   identities: z.array(userIdentitySchema)

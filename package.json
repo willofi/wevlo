@@ -18,7 +18,7 @@
     "test:e2e": "turbo run test:e2e",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
-    "db:migrate": "pnpm --filter @wevlo/data-access migrate",
+    "db:migrate": "WEVLO_ENV_FILE=apps/api/.env.local pnpm --filter @wevlo/data-access migrate",
     "qa:check": "pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {

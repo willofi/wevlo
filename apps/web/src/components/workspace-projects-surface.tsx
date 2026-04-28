@@ -14,6 +14,7 @@ import { getProjectHref } from "@/lib/issue-hub-data";
 type WorkspaceProjectsSurfaceProps = {
   projects: ProjectSummaryDto[];
   viewer: {
+    avatarUrl?: string | null;
     email?: string | null;
     name: string;
   };

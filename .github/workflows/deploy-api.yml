@@ -85,12 +85,20 @@ jobs:
           set -eu
           mkdir -p /opt/wevlo/deploy
           cp deploy/docker-compose.api.yml /opt/wevlo/deploy/docker-compose.api.yml
-          cd /opt/wevlo/deploy
-
-          if [ ! -f .env.production ]; then
-            echo "Missing /opt/wevlo/deploy/.env.production on Mac mini"
-            exit 1
+          
+          # apps/api/.env.production을 가져와서 배포 경로에 복사
+          if [ -f apps/api/.env.production ]; then
+            echo "Copying apps/api/.env.production to /opt/wevlo/deploy/.env.production"
+            cp apps/api/.env.production /opt/wevlo/deploy/.env.production
+          else
+            echo "Warning: apps/api/.env.production not found in source. Checking existing target."
+            if [ ! -f /opt/wevlo/deploy/.env.production ]; then
+              echo "Error: .env.production is missing in both source and target."
+              exit 1
+            fi
           fi
+
+          cd /opt/wevlo/deploy
 
           if grep -q '^IMAGE_TAG=' .env.production; then
             sed -i.bak "s/^IMAGE_TAG=.*/IMAGE_TAG=${GH_SHA}/" .env.production

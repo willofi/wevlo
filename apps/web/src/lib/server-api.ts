@@ -16,13 +16,15 @@ import type {
   WorkspaceDto,
   WorkspaceSummaryDto
 } from "@wevlo/contracts";
+import { redirect } from "next/navigation";
 
 import { requireCurrentAuthSession } from "@/lib/auth-server";
 import { buildApiInternalAuthHeaders } from "@/lib/internal-auth-headers";
-import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/runtime-env";
+import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
 
 const apiBaseUrl = getWebApiBaseUrl();
 const internalToken = getInternalAuthToken();
+const isProfileSetupRequired = (me: MeDto): boolean => me.user.name.trim().length === 0;
 
 const requestJson = async <TResponse>(
   path: string,
@@ -42,6 +44,7 @@ const requestJson = async <TResponse>(
         {
           provider: session.provider,
           providerUserId: session.providerUserId,
+          ...(session.userAvatarUrl !== undefined ? { userAvatarUrl: session.userAvatarUrl } : {}),
           userEmail: session.userEmail,
           userId: session.userId,
           userName: session.userName
@@ -74,11 +77,17 @@ export const getSession = async (): Promise<SessionDto> => {
   return session;
 };
 
-export const getMe = async (): Promise<MeDto> => {
+export const getMe = async (options?: {
+  allowIncompleteProfile?: boolean;
+}): Promise<MeDto> => {
   const me = await requestJson<MeDto>("/me");
 
   if (!me) {
     throw new Error("User profile unavailable");
+  }
+
+  if (!options?.allowIncompleteProfile && isProfileSetupRequired(me)) {
+    redirect("/welcome/profile");
   }
 
   return me;

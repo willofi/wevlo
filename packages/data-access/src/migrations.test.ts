@@ -18,7 +18,9 @@ describe("migrations", () => {
       "0011_issue_reactions",
       "0012_project_board_icons",
       "0013_comment_threads",
-      "0014_issue_comment_reactions"
+      "0014_issue_comment_reactions",
+      "0015_verification_tokens",
+      "0016_user_avatars"
     ]);
   });
 });

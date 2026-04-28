@@ -17,5 +17,6 @@ export * from "./http/me";
 export * from "./http/notification";
 export * from "./http/project";
 export * from "./http/session";
+export * from "./http/auth";
 export * from "./http/workspace";
 export * from "./webhooks/inbound-event";

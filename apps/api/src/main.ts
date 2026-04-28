@@ -1,8 +1,10 @@
-import { createDatabase, destroyDatabase, validateApiRuntimeEnv } from "@wevlo/data-access";
-
-import { buildApi } from "./app.js";
+import { config as loadDotenv } from "dotenv";
 
 const start = async () => {
+  loadDotenv({ path: ".env.local" });
+  const { createDatabase, destroyDatabase, validateApiRuntimeEnv } = await import("@wevlo/data-access");
+  const { buildApi } = await import("./app.js");
+
   validateApiRuntimeEnv();
   const database = createDatabase();
   const app = buildApi({

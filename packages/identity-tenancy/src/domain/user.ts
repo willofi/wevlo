@@ -5,7 +5,10 @@ import {
 
 import type { UserDto, UserIdentityDto } from "@wevlo/contracts";
 
-export type User = UserDto;
+export type User = UserDto & {
+  avatarContentType: string | null;
+  avatarStorageKey: string | null;
+};
 export type UserIdentity = UserIdentityDto;
 
 const userHandlePattern = /^[a-z0-9_]{3,32}$/;
@@ -32,10 +35,15 @@ export const normalizeUserHandle = (value: string): string => {
 export const isUserHandleValid = (value: string): boolean => userHandlePattern.test(value);
 
 export const createUser = (input: {
+  avatarUrl?: string | null;
+  avatarContentType?: string | null;
   email?: string | null;
   handle: string;
   name: string;
 }): User => ({
+  avatarContentType: input.avatarContentType ?? null,
+  avatarStorageKey: null,
+  avatarUrl: input.avatarUrl ?? null,
   createdAt: new Date().toISOString(),
   email: input.email ?? null,
   handle: input.handle,
