@@ -19,6 +19,7 @@
     "@wevlo/projects": "workspace:*",
     "dotenv": "catalog:",
     "fastify": "latest",
+    "fastify-plugin": "^5.1.0",
     "tsx": "catalog:",
     "zod": "latest"
   },

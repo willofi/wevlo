@@ -130,7 +130,7 @@ export const getWorkspaceIntegrations = async (
   workspaceSlug: string
 ): Promise<IntegrationInstallationDto[]> => {
   const installations = await requestJson<IntegrationInstallationDto[]>(
-    `/workspaces/${workspaceSlug}/integrations/installations`
+    `/integrations/workspaces/${workspaceSlug}/installations`
   );
 
   return installations ?? [];
@@ -146,7 +146,7 @@ export const getProjectIntegrations = async (
   const response = await requestJson<{
     links: IntegrationProjectLinkDto[];
     syncStatuses: SyncStatusDto[];
-  }>(`/workspaces/${workspaceSlug}/projects/${projectKey}/integrations/links`);
+  }>(`/integrations/workspaces/${workspaceSlug}/projects/${projectKey}/links`);
 
   return response ?? {
     links: [],

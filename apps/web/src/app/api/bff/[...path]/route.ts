@@ -46,7 +46,10 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[]): Promi
   });
 
   const body = isBodyAllowed(request.method) ? await request.arrayBuffer() : null;
-  const upstream = await fetch(`${apiBaseUrl}/${pathSegments.join("/")}${request.nextUrl.search}`, {
+  const path = pathSegments.join("/");
+  const upstreamUrl = `${apiBaseUrl}/api/v1/${path}`;
+  
+  const upstream = await fetch(`${upstreamUrl}${request.nextUrl.search}`, {
     ...(body ? { body } : {}),
     headers,
     cache: "no-store",

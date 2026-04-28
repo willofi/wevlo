@@ -475,7 +475,7 @@ export const getWorkspaceIntegrations = async (
   workspaceSlug: string
 ): Promise<IntegrationInstallationDto[]> => {
   const installations = await requestJson<IntegrationInstallationDto[]>(
-    `/workspaces/${workspaceSlug}/integrations/installations`
+    `/integrations/workspaces/${workspaceSlug}/installations`
   );
 
   return installations ?? [];
@@ -487,7 +487,7 @@ export const createWorkspaceIntegrationInstallation = async (
   payload: CreateIntegrationInstallationRequest
 ): Promise<IntegrationInstallationDto> => {
   const installation = await requestJson<IntegrationInstallationDto>(
-    `/workspaces/${workspaceSlug}/integrations/${provider}/installations`,
+    `/integrations/workspaces/${workspaceSlug}/${provider}/installations`,
     {
       body: JSON.stringify(payload),
       method: "POST"
@@ -511,7 +511,7 @@ export const getProjectIntegrations = async (
   const response = await requestJson<{
     links: IntegrationProjectLinkDto[];
     syncStatuses: SyncStatusDto[];
-  }>(`/workspaces/${workspaceSlug}/projects/${projectKey}/integrations/links`);
+  }>(`/integrations/workspaces/${workspaceSlug}/projects/${projectKey}/links`);
 
   return response ?? {
     links: [],
@@ -526,7 +526,7 @@ export const createProjectIntegrationLink = async (
   payload: CreateIntegrationProjectLinkRequest
 ): Promise<IntegrationProjectLinkDto> => {
   const link = await requestJson<IntegrationProjectLinkDto>(
-    `/workspaces/${workspaceSlug}/projects/${projectKey}/integrations/${provider}/links`,
+    `/integrations/workspaces/${workspaceSlug}/projects/${projectKey}/${provider}/links`,
     {
       body: JSON.stringify(payload),
       method: "POST"
@@ -552,7 +552,7 @@ export const importProjectIntegrationIssues = async (
   const response = await requestJson<{
     importedCount: number;
     projectLink: IntegrationProjectLinkDto;
-  }>(`/workspaces/${workspaceSlug}/projects/${projectKey}/integrations/${provider}/import`, {
+  }>(`/integrations/workspaces/${workspaceSlug}/projects/${projectKey}/${provider}/import`, {
     body: JSON.stringify(payload),
     method: "POST"
   });
