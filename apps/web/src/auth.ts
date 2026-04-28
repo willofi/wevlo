@@ -101,6 +101,13 @@ export const authOptions: NextAuthOptions = {
         ? token.workspaceSlugs.filter((value): value is string => typeof value === "string")
         : [];
 
+      // These are used by buildApiInternalAuthHeaders
+      session.userEmail = session.user.email ?? "";
+      session.userName = session.user.name;
+      session.userId = session.user.id;
+      session.provider = session.user.provider;
+      session.providerUserId = session.user.providerUserId;
+
       return session;
     }
   },
