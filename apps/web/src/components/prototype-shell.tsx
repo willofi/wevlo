@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import type { PropsWithChildren, ReactNode } from "react";
+import { useState, type PropsWithChildren, type ReactNode } from "react";
+import { UserPlus } from "lucide-react";
 
 import type { ProjectSummaryDto } from "@wevlo/contracts";
 import { ScrollArea, cn } from "@wevlo/ui-web";
 
 import { AccountMenu } from "@/components/account-menu";
 import { GlobalWorkspaceActions, type WorkspaceActionsContext } from "@/components/global-workspace-actions";
+import { InviteMemberDialog } from "@/components/invite-member-dialog";
 import { NotificationSummaryProvider } from "@/components/notification-summary-provider";
 import { PersonalNav } from "@/components/personal-nav";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -46,9 +48,18 @@ export function PrototypeShell({
   workspaceActionsContext,
   workspaces
 }: PrototypeShellProps) {
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+
   return (
     <NotificationSummaryProvider>
       <div className="h-screen overflow-hidden bg-background text-foreground">
+        {currentWorkspaceSlug && (
+          <InviteMemberDialog
+            workspaceSlug={currentWorkspaceSlug}
+            open={isInviteDialogOpen}
+            onOpenChange={setIsInviteDialogOpen}
+          />
+        )}
         <div className="grid h-screen lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="hidden h-screen min-h-0 bg-sidebar text-sidebar-foreground lg:flex lg:flex-col">
           <div className="px-3 py-3.5">
@@ -93,9 +104,17 @@ export function PrototypeShell({
                           <span className="font-mono text-[11px] text-muted-foreground">{project.key}</span>
                           <span className="truncate font-medium">{project.name}</span>
                         </div>
-                        <div className="mt-0.5 text-[11px] text-muted-foreground">{project.currentUserRole}</div>
                       </Link>
                     ))}
+                    
+                    <button
+                      type="button"
+                      onClick={() => setIsInviteDialogOpen(true)}
+                      className="mt-1 flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground group"
+                    >
+                      <UserPlus className="size-3.5 transition-colors group-hover:text-primary" />
+                      Invite people
+                    </button>
                   </div>
                 </section>
               ) : null}
