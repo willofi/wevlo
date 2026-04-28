@@ -8,7 +8,7 @@ import type {
   WorkspaceInvitationDto,
   WorkspaceMemberDto
 } from "@wevlo/contracts";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@wevlo/ui-web";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, cn, Input } from "@wevlo/ui-web";
 
 import { PageState, pageStateButtonStyle, pageStateLinkStyle } from "@/components/page-state";
 import {

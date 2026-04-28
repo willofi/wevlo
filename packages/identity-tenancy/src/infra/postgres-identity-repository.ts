@@ -567,14 +567,6 @@ export class PostgresIdentityRepository {
       .execute();
   }
 
-  async removeMember(workspaceId: string, userId: string): Promise<void> {
-    await this.database
-      .deleteFrom("workspace_memberships")
-      .where("workspace_id", "=", workspaceId)
-      .where("user_id", "=", userId)
-      .execute();
-  }
-
   async updateProfile(input: {
     handle?: string;
     name?: string;

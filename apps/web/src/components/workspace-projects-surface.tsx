@@ -80,7 +80,7 @@ export function WorkspaceProjectsSurface({
                   <div>
                     <div className="text-base font-semibold text-foreground group-hover:text-primary transition-colors">{project.name}</div>
                     <div className="mt-1 flex items-center gap-2">
-                      <Badge variant="secondary" className="px-1.5 py-0 text-[10px] uppercase tracking-wider font-semibold bg-background/50 border-border/40">
+                      <Badge variant="default" className="px-1.5 py-0 text-[10px] uppercase tracking-wider font-semibold bg-background/50 border-border/40">
                         {project.currentUserRole}
                       </Badge>
                       <span className="text-[11px] text-muted-foreground/60">•</span>

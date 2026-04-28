@@ -2,7 +2,7 @@ import Fastify, { type FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { randomUUID } from "node:crypto";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 
 import {
   createIntegrationInstallationRequestSchema,
