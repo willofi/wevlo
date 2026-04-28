@@ -1,6 +1,9 @@
 import type { ProjectMemberDto, ProjectRole, WorkspaceInvitationDto } from "@wevlo/contracts";
 import { createEntityId } from "@wevlo/core";
 import type { DatabaseExecutor } from "@wevlo/data-access";
+import { createHash } from "node:crypto";
+
+const hashInvitationToken = (token: string): string => createHash("sha256").update(token).digest("hex");
 
 const hydrateUser = async (
   database: DatabaseExecutor,
@@ -44,6 +47,7 @@ const hydrateUser = async (
 
 const mapInvitationRow = (row: {
   accept_token: string | null;
+  accept_token_hash: string | null;
   accepted_at: string | null;
   accepted_by_user_id: string | null;
   created_at: string;
@@ -54,7 +58,9 @@ const mapInvitationRow = (row: {
   invited_by_user_id: string;
   project_id: string | null;
   role: WorkspaceInvitationDto["role"];
+  send_attempt_count: number;
   status: WorkspaceInvitationDto["status"];
+  last_send_error: string | null;
   updated_at: string;
   workspace_id: string;
 }): WorkspaceInvitationDto => ({
@@ -69,7 +75,9 @@ const mapInvitationRow = (row: {
   invitedByUserId: row.invited_by_user_id,
   projectId: row.project_id,
   role: row.role,
+  sendAttemptCount: Number(row.send_attempt_count ?? 0),
   status: row.status,
+  lastSendError: row.last_send_error ?? null,
   updatedAt: row.updated_at,
   workspaceId: row.workspace_id
 });
@@ -236,8 +244,9 @@ export class PostgresProjectCollaborationRepository {
   }): Promise<WorkspaceInvitationDto> {
     const createdAt = new Date().toISOString();
     const invitationId = createEntityId("workspace_invitation");
+    const token = createEntityId("invite_token");
     const invitation: WorkspaceInvitationDto = {
-      acceptToken: createEntityId("invite_token"),
+      acceptToken: token,
       acceptedAt: null,
       acceptedByUserId: null,
       createdAt,
@@ -248,7 +257,9 @@ export class PostgresProjectCollaborationRepository {
       invitedByUserId: input.invitedByUserId,
       projectId: input.projectId,
       role: input.role,
+      sendAttemptCount: 0,
       status: "pending",
+      lastSendError: null,
       updatedAt: createdAt,
       workspaceId: input.workspaceId
     };
@@ -256,7 +267,8 @@ export class PostgresProjectCollaborationRepository {
     await this.database
       .insertInto("workspace_invitations")
       .values({
-        accept_token: invitation.acceptToken,
+        accept_token: null,
+        accept_token_hash: invitation.acceptToken ? hashInvitationToken(invitation.acceptToken) : null,
         accepted_at: invitation.acceptedAt,
         accepted_by_user_id: invitation.acceptedByUserId,
         created_at: invitation.createdAt,
@@ -267,6 +279,8 @@ export class PostgresProjectCollaborationRepository {
         invited_by_user_id: invitation.invitedByUserId,
         project_id: invitation.projectId,
         role: invitation.role,
+        send_attempt_count: invitation.sendAttemptCount,
+        last_send_error: invitation.lastSendError,
         status: invitation.status,
         updated_at: invitation.updatedAt,
         workspace_id: invitation.workspaceId

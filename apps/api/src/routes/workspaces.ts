@@ -15,6 +15,7 @@ import {
   listWorkspaceMembersUseCase,
   listWorkspaceInvitationsUseCase,
   createWorkspaceInvitationUseCase,
+  revokeWorkspaceInvitationUseCase,
   updateWorkspaceMemberUseCase,
   removeWorkspaceMemberUseCase,
   WorkspaceSlugTakenError,
@@ -30,6 +31,7 @@ import { sendError } from "../errors.js";
 
 const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
   const webAppBaseUrl = (process.env.NEXTAUTH_URL ?? process.env.WEVLO_WEB_BASE_URL ?? "http://localhost:3000").trim();
+  const inviteAcceptRequired = process.env.INVITE_ACCEPT_REQUIRED_FOR_MEMBERSHIP?.trim().toLowerCase() !== "false";
 
   fastify.get("/", async (request, reply) => {
     const userId = (await fastify.resolveCurrentUser(request)).id;
@@ -188,6 +190,11 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get("/:workspaceSlug/invitations", async (request, reply) => {
     const params = request.params as { workspaceSlug: string };
+    const query = z
+      .object({
+        status: z.enum(["pending", "accepted", "revoked", "expired", "delivery_failed"]).optional()
+      })
+      .parse(request.query);
     const currentUser = await fastify.resolveCurrentUser(request);
     const { membership, workspace } = await fastify.resolveWorkspaceAccess(currentUser.id, params.workspaceSlug);
 
@@ -199,7 +206,7 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
 
-    const invitations = await listWorkspaceInvitationsUseCase(fastify.identityRepository, workspace.id);
+    const invitations = await listWorkspaceInvitationsUseCase(fastify.identityRepository, workspace.id, query.status);
     return reply.send(invitations);
   });
 
@@ -248,7 +255,7 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
           const scoped = fastify.createScopedRepositories(trx);
           const existingUser = await scoped.identityRepository.findUserByEmail(email);
 
-          if (existingUser) {
+          if (existingUser && !inviteAcceptRequired) {
             await scoped.identityRepository.createMember({
               role: payload.role,
               userId: existingUser.id,
@@ -309,8 +316,18 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
           };
         });
 
-        const invitePathToken = inviteResult.inviteToken ?? inviteResult.invitationId;
+        const invitePathToken = inviteResult.invitationId;
         const inviteUrl = invitePathToken ? `${webAppBaseUrl}/invite/${encodeURIComponent(invitePathToken)}` : `${webAppBaseUrl}/`;
+
+        if (!inviteResult.invitationId) {
+          results.push({
+            email,
+            invitationId: null,
+            reason: null,
+            status: inviteResult.status
+          });
+          continue;
+        }
 
         try {
           await sendWorkspaceInviteEmail({
@@ -320,9 +337,12 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
             to: email,
             workspaceName: workspace.name
           });
+          await fastify.identityRepository.markInvitationEmailDelivery(inviteResult.invitationId, { error: null });
         } catch (emailError) {
+          const message = emailError instanceof Error ? emailError.message : String(emailError);
+          await fastify.identityRepository.markInvitationEmailDelivery(inviteResult.invitationId, { error: message });
           request.log.error(
-            { email, error: emailError instanceof Error ? emailError.message : String(emailError) },
+            { email, error: message },
             "workspace invite email send failed"
           );
           results.push({
@@ -355,6 +375,89 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.status(201).send(createWorkspaceInvitationsResponseSchema.parse({ results }));
+  });
+
+  fastify.post("/:workspaceSlug/invitations/:invitationId/resend", async (request, reply) => {
+    const params = request.params as { invitationId: string; workspaceSlug: string };
+    const currentUser = await fastify.resolveCurrentUser(request);
+    const { membership, workspace } = await fastify.resolveWorkspaceAccess(currentUser.id, params.workspaceSlug);
+
+    if (!workspace) {
+      return sendError(reply, 404, "workspace.not_found", "Workspace not found");
+    }
+
+    if (fastify.requireWorkspaceAction(reply, membership, "workspace.invite", "Workspace invite denied")) {
+      return;
+    }
+
+    const invitation = await fastify.identityRepository.findInvitationById(params.invitationId);
+    if (!invitation || invitation.workspaceId !== workspace.id || invitation.projectId) {
+      return sendError(reply, 404, "workspace.invitation_not_found", "Invitation not found");
+    }
+    if (invitation.status === "accepted" || invitation.status === "revoked") {
+      return sendError(reply, 409, "workspace.invitation_not_pending", "Invitation cannot be resent");
+    }
+
+    const inviteUrl = `${webAppBaseUrl}/invite/${encodeURIComponent(invitation.acceptToken ?? invitation.id)}`;
+    try {
+      await sendWorkspaceInviteEmail({
+        expiresAt: invitation.expiresAt,
+        inviteUrl,
+        role: invitation.role as WorkspaceRole,
+        to: invitation.inviteeEmail ?? "",
+        workspaceName: workspace.name
+      });
+      await fastify.identityRepository.markInvitationEmailDelivery(invitation.id, { error: null });
+    } catch (emailError) {
+      const message = emailError instanceof Error ? emailError.message : String(emailError);
+      await fastify.identityRepository.markInvitationEmailDelivery(invitation.id, { error: message });
+      return sendError(reply, 502, "workspace.invitation_email_failed", "Invitation email send failed");
+    }
+
+    await fastify.recordAudit({
+      action: "workspace.invite.resend",
+      actorId: currentUser.id,
+      payload: { invitationId: invitation.id },
+      resourceId: invitation.id,
+      workspaceId: workspace.id
+    });
+
+    const updated = await fastify.identityRepository.findInvitationById(invitation.id);
+    return reply.send(updated);
+  });
+
+  fastify.delete("/:workspaceSlug/invitations/:invitationId", async (request, reply) => {
+    const params = request.params as { invitationId: string; workspaceSlug: string };
+    const currentUser = await fastify.resolveCurrentUser(request);
+    const { membership, workspace } = await fastify.resolveWorkspaceAccess(currentUser.id, params.workspaceSlug);
+
+    if (!workspace) {
+      return sendError(reply, 404, "workspace.not_found", "Workspace not found");
+    }
+
+    if (fastify.requireWorkspaceAction(reply, membership, "workspace.invite", "Workspace invite denied")) {
+      return;
+    }
+
+    const invitation = await fastify.identityRepository.findInvitationById(params.invitationId);
+    if (!invitation || invitation.workspaceId !== workspace.id || invitation.projectId) {
+      return sendError(reply, 404, "workspace.invitation_not_found", "Invitation not found");
+    }
+
+    await revokeWorkspaceInvitationUseCase(fastify.identityRepository, {
+      invitationId: invitation.id,
+      workspaceId: workspace.id
+    });
+
+    await fastify.recordAudit({
+      action: "workspace.invite.revoke",
+      actorId: currentUser.id,
+      payload: { invitationId: invitation.id },
+      resourceId: invitation.id,
+      workspaceId: workspace.id
+    });
+
+    return reply.status(204).send();
   });
 
   fastify.put("/:workspaceSlug/members/:userId", async (request, reply) => {
@@ -413,6 +516,16 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
       userId: params.userId,
       workspaceId: workspace.id
     });
+    await fastify.recordAudit({
+      action: "workspace.member.role_change",
+      actorId: currentUser.id,
+      payload: {
+        role: payload.role,
+        userId: params.userId
+      },
+      resourceId: params.userId,
+      workspaceId: workspace.id
+    });
 
     const updatedMembers = await listWorkspaceMembersUseCase(fastify.identityRepository, workspace.id);
     const updatedMember = updatedMembers.find((m) => m.userId === params.userId);
@@ -464,6 +577,15 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
 
     await removeWorkspaceMemberUseCase(fastify.identityRepository, {
       userId: params.userId,
+      workspaceId: workspace.id
+    });
+    await fastify.recordAudit({
+      action: "workspace.member.remove",
+      actorId: currentUser.id,
+      payload: {
+        userId: params.userId
+      },
+      resourceId: params.userId,
       workspaceId: workspace.id
     });
 
@@ -558,6 +680,7 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send(accepted);
   });
+
 };
 
 export default workspaceRoutes;

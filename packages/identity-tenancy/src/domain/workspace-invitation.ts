@@ -28,7 +28,9 @@ export const createWorkspaceInvitation = (input: {
   invitedByUserId: input.invitedByUserId,
   projectId: input.projectId ?? null,
   role: input.role,
+  sendAttemptCount: 0,
   status: "pending",
+  lastSendError: null,
   updatedAt: new Date().toISOString(),
   workspaceId: input.workspaceId
 });
@@ -41,6 +43,8 @@ export const acceptWorkspaceInvitation = (
   acceptToken: null,
   acceptedAt: new Date().toISOString(),
   acceptedByUserId,
+  lastSendError: invitation.lastSendError,
+  sendAttemptCount: invitation.sendAttemptCount,
   status: "accepted",
   updatedAt: new Date().toISOString()
 });
@@ -48,6 +52,8 @@ export const acceptWorkspaceInvitation = (
 export const revokeWorkspaceInvitation = (invitation: WorkspaceInvitation): WorkspaceInvitation => ({
   ...invitation,
   acceptToken: null,
+  lastSendError: invitation.lastSendError,
+  sendAttemptCount: invitation.sendAttemptCount,
   status: "revoked",
   updatedAt: new Date().toISOString()
 });

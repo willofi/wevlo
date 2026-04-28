@@ -94,6 +94,9 @@ export type WorkspaceInvitationTable = {
   accepted_at: string | null;
   expires_at: string;
   accept_token: string | null;
+  accept_token_hash: string | null;
+  send_attempt_count: number;
+  last_send_error: string | null;
   created_at: string;
   updated_at: string;
 };

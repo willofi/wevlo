@@ -849,6 +849,32 @@ const migrations: Migration[] = [
       add column if not exists avatar_content_type text null
       `
     ]
+  },
+  {
+    name: "0017_workspace_invite_delivery_and_token_hash",
+    statements: [
+      `
+      alter table workspace_invitations
+      add column if not exists accept_token_hash text null
+      `,
+      `
+      alter table workspace_invitations
+      add column if not exists send_attempt_count integer not null default 0
+      `,
+      `
+      alter table workspace_invitations
+      add column if not exists last_send_error text null
+      `,
+      `
+      update workspace_invitations
+      set send_attempt_count = coalesce(send_attempt_count, 0)
+      `,
+      `
+      create index if not exists idx_workspace_invitations_accept_token_hash
+      on workspace_invitations(accept_token_hash)
+      where accept_token_hash is not null
+      `
+    ]
   }
 ];
 

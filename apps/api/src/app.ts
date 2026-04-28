@@ -22,6 +22,7 @@ import notificationRoutes from "./routes/notifications.js";
 import workspaceRoutes from "./routes/workspaces.js";
 import projectRoutes from "./routes/projects.js";
 import issueRoutes from "./routes/issues.js";
+import workspaceInvitationRoutes from "./routes/workspace-invitations.js";
 import { UnauthorizedError } from "./errors.js";
 
 export type ApiDependencies = {
@@ -58,6 +59,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
     v1.register(integrationRoutes, { prefix: "/integrations" });
     v1.register(notificationRoutes);
     v1.register(workspaceRoutes, { prefix: "/workspaces" });
+    v1.register(workspaceInvitationRoutes);
     v1.register(projectRoutes);
     v1.register(issueRoutes);
   }, { prefix: "/api/v1" });

@@ -20,7 +20,8 @@ describe("migrations", () => {
       "0013_comment_threads",
       "0014_issue_comment_reactions",
       "0015_verification_tokens",
-      "0016_user_avatars"
+      "0016_user_avatars",
+      "0017_workspace_invite_delivery_and_token_hash"
     ]);
   });
 });

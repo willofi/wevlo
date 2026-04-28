@@ -10,7 +10,9 @@ import {
   pageStateLinkClassName
 } from "@/components/page-state";
 import { getCurrentAuthSession } from "@/lib/auth-server";
-import { acceptWorkspaceInvitationByToken, getWorkspaceInvitationByToken } from "@/lib/server-api";
+import { getWebApiBaseUrl } from "@/lib/env";
+import { acceptWorkspaceInvitationByToken } from "@/lib/server-api";
+import { workspaceInvitationSchema } from "@wevlo/contracts";
 
 type InvitePageProps = {
   params: Promise<{
@@ -22,7 +24,13 @@ export default async function AcceptInvitePage({ params }: InvitePageProps) {
   const { inviteCode } = await params;
   const session = await getCurrentAuthSession();
   const invitePath = sanitizeReturnPath(`/invite/${inviteCode}`);
-  const invitation = await getWorkspaceInvitationByToken(inviteCode);
+  const invitationResponse = await fetch(
+    `${getWebApiBaseUrl()}/api/v1/workspace-invitations/${encodeURIComponent(inviteCode)}`,
+    { cache: "no-store" }
+  );
+  const invitation = invitationResponse.ok
+    ? workspaceInvitationSchema.parse(await invitationResponse.json())
+    : null;
 
   if (!invitation) {
     notFound();

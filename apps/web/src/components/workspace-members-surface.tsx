@@ -18,6 +18,8 @@ import {
   getInviteHref,
   getWorkspaceMemberHref,
   removeWorkspaceMember,
+  resendWorkspaceInvitation,
+  revokeWorkspaceInvitation,
   updateWorkspaceMember
 } from "@/lib/issue-hub-data";
 
@@ -54,6 +56,9 @@ const describeInviteFailure = (failure: WorkspaceInvitationResult): string => {
   if (failure.reason === "invite_create_failed") {
     return `${failure.email}: failed to create invitation`;
   }
+  if (failure.reason === "invite_already_pending") {
+    return `${failure.email}: invitation already pending`;
+  }
   return `${failure.email}: unknown error`;
 };
 
@@ -68,7 +73,7 @@ export const WorkspaceMembersSurface = ({
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [invitations] = useState(initialInvitations);
+  const [invitations, setInvitations] = useState(initialInvitations);
   const [members, setMembers] = useState(initialMembers);
 
   const currentUserMembership = useMemo(
@@ -78,15 +83,15 @@ export const WorkspaceMembersSurface = ({
 
   const currentUserRole = currentUserMembership?.role ?? "Guest";
   const isOwner = currentUserRole === "Owner";
-  const canInvite = currentUserRole === "Owner" || currentUserRole === "Maintainer" || currentUserRole === "Member";
+  const canInvite = currentUserRole === "Owner" || currentUserRole === "Maintainer";
 
   const pendingInvitations = useMemo(
-    () => invitations.filter((invitation) => invitation.status === "pending"),
+    () => invitations.filter((invitation) => invitation.status === "pending" || invitation.status === "delivery_failed"),
     [invitations]
   );
 
   const completedInvitations = useMemo(
-    () => invitations.filter((invitation) => invitation.status !== "pending"),
+    () => invitations.filter((invitation) => invitation.status !== "pending" && invitation.status !== "delivery_failed"),
     [invitations]
   );
 
@@ -118,8 +123,72 @@ export const WorkspaceMembersSurface = ({
       setEmail("");
       setRole("Member");
       setStatusMessage(`Created ${createdCount}, already members ${alreadyMemberCount}, failed ${failedCount}.`);
+      setInvitations((current) => [
+        ...current,
+        ...results
+          .filter((result) => result.invitationId && result.status !== "already_member")
+          .map((result): WorkspaceInvitationDto => {
+            const status: WorkspaceInvitationDto["status"] =
+              result.reason === "email_send_failed" ? "delivery_failed" : "pending";
+            return {
+              id: result.invitationId!,
+              workspaceId: workspace.id,
+              projectId: null,
+              inviteeUserId: null,
+              inviteeEmail: result.email,
+              role,
+              status,
+              invitedByUserId: currentUser.id,
+              acceptedByUserId: null,
+              acceptedAt: null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              acceptToken: result.invitationId,
+              sendAttemptCount: 1,
+              lastSendError: result.reason === "email_send_failed" ? "email_send_failed" : null
+            };
+          })
+      ]);
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : "Invitation failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResendInvitation = async (invitationId: string) => {
+    try {
+      setIsSaving(true);
+      setError(null);
+      const updated = await resendWorkspaceInvitation(workspace.slug, invitationId);
+      setInvitations((current) => current.map((item) => (item.id === invitationId ? updated : item)));
+    } catch (resendError) {
+      setError(resendError instanceof Error ? resendError.message : "Invitation resend failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRevokeInvitation = async (invitationId: string) => {
+    try {
+      setIsSaving(true);
+      setError(null);
+      await revokeWorkspaceInvitation(workspace.slug, invitationId);
+      setInvitations((current) =>
+        current.map((item) =>
+          item.id === invitationId
+            ? {
+                ...item,
+                status: "revoked",
+                updatedAt: new Date().toISOString(),
+                acceptToken: null
+              }
+            : item
+        )
+      );
+    } catch (revokeError) {
+      setError(revokeError instanceof Error ? revokeError.message : "Invitation cancel failed");
     } finally {
       setIsSaving(false);
     }
@@ -281,7 +350,7 @@ export const WorkspaceMembersSurface = ({
 
       <Card className="bg-card/85">
         <CardHeader>
-          <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Pending invitations</div>
+          <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Invitations</div>
           <CardTitle>{pendingInvitations.length} waiting</CardTitle>
         </CardHeader>
         <CardContent>
@@ -300,12 +369,20 @@ export const WorkspaceMembersSurface = ({
                       {invitation.inviteeEmail ?? invitation.inviteeUserId ?? "Pending invite"}
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      {invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                      {invitation.role} · {invitation.status} · expires {new Date(invitation.expiresAt).toLocaleDateString()}
                     </div>
                   </div>
-                  <Button asChild variant="outline" size="sm">
-                    <a href={getInviteHref(invitation.acceptToken ?? invitation.id)}>Open invite</a>
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <a href={getInviteHref(invitation.acceptToken ?? invitation.id)}>Open invite</a>
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" disabled={isSaving} onClick={() => void handleResendInvitation(invitation.id)}>
+                      Resend
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" disabled={isSaving} onClick={() => void handleRevokeInvitation(invitation.id)}>
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

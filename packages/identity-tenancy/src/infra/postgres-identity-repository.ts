@@ -1,6 +1,7 @@
 import type { UserDto, WorkspaceInvitationDto, WorkspaceMemberDto, WorkspaceRole } from "@wevlo/contracts";
 import type { WorkspaceId } from "@wevlo/core";
 import { sql, type DatabaseExecutor } from "@wevlo/data-access";
+import { createHash } from "node:crypto";
 
 import {
   createUser,
@@ -15,8 +16,7 @@ import {
   acceptWorkspaceInvitation,
   createWorkspaceInvitation,
   isWorkspaceInvitationExpired,
-  revokeWorkspaceInvitation,
-  type WorkspaceInvitation
+  revokeWorkspaceInvitation
 } from "../domain/workspace-invitation";
 
 const mapUserRow = (row: {
@@ -83,6 +83,7 @@ const hydrateUser = async (database: DatabaseExecutor, userId: string): Promise<
 
 const mapWorkspaceInvitationRow = (row: {
   accept_token: string | null;
+  accept_token_hash: string | null;
   accepted_at: string | null;
   accepted_by_user_id: string | null;
   created_at: string;
@@ -93,7 +94,9 @@ const mapWorkspaceInvitationRow = (row: {
   invited_by_user_id: string;
   project_id: string | null;
   role: WorkspaceInvitationDto["role"];
+  send_attempt_count: number;
   status: WorkspaceInvitationDto["status"];
+  last_send_error: string | null;
   updated_at: string;
   workspace_id: string;
 }): WorkspaceInvitationDto => ({
@@ -108,10 +111,16 @@ const mapWorkspaceInvitationRow = (row: {
   invitedByUserId: row.invited_by_user_id,
   projectId: row.project_id,
   role: row.role,
+  sendAttemptCount: Number(row.send_attempt_count ?? 0),
   status: row.status,
+  lastSendError: row.last_send_error ?? null,
   updatedAt: row.updated_at,
   workspaceId: row.workspace_id
 });
+
+const hashInvitationToken = (token: string): string => {
+  return createHash("sha256").update(token).digest("hex");
+};
 
 export class PostgresIdentityRepository {
   constructor(private readonly database: DatabaseExecutor) {}
@@ -487,24 +496,44 @@ export class PostgresIdentityRepository {
       .execute();
   }
 
-  async listInvitations(workspaceId: string): Promise<WorkspaceInvitationDto[]> {
-    const rows = await this.database
+  async listInvitations(
+    workspaceId: string,
+    status?: WorkspaceInvitationDto["status"]
+  ): Promise<WorkspaceInvitationDto[]> {
+    let query = this.database
       .selectFrom("workspace_invitations")
       .selectAll()
       .where("workspace_id", "=", workspaceId)
       .where("project_id", "is", null)
-      .orderBy("created_at", "asc")
-      .execute();
+      .orderBy("created_at", "asc");
+
+    if (status) {
+      query = query.where("status", "=", status);
+    }
+
+    const rows = await query.execute();
 
     return rows.map(mapWorkspaceInvitationRow);
   }
 
   async findInvitationByToken(token: string): Promise<WorkspaceInvitationDto | null> {
-    const row = await this.database
-      .selectFrom("workspace_invitations")
-      .selectAll()
-      .where("accept_token", "=", token)
-      .executeTakeFirst();
+    const tokenHash = hashInvitationToken(token);
+    const row =
+      (await this.database
+        .selectFrom("workspace_invitations")
+        .selectAll()
+        .where("accept_token_hash", "=", tokenHash)
+        .executeTakeFirst()) ??
+      (await this.database
+        .selectFrom("workspace_invitations")
+        .selectAll()
+        .where("accept_token", "=", token)
+        .executeTakeFirst()) ??
+      (await this.database
+        .selectFrom("workspace_invitations")
+        .selectAll()
+        .where("id", "=", token)
+        .executeTakeFirst());
 
     if (!row) {
       return null;
@@ -546,21 +575,37 @@ export class PostgresIdentityRepository {
     inviteeEmail?: string | null;
     inviteeUserId?: string | null;
     invitedByUserId: string;
-    role: WorkspaceInvitation["role"];
+    role: WorkspaceRole;
     workspaceId: string;
   }): Promise<WorkspaceInvitationDto> {
+    const existingPending = input.inviteeEmail
+      ? await this.database
+          .selectFrom("workspace_invitations")
+          .selectAll()
+          .where("workspace_id", "=", input.workspaceId)
+          .where("project_id", "is", null)
+          .where("invitee_email", "=", input.inviteeEmail)
+          .where("status", "=", "pending")
+          .executeTakeFirst()
+      : null;
+
+    if (existingPending) {
+      return mapWorkspaceInvitationRow(existingPending);
+    }
+
     const invitation = createWorkspaceInvitation({
       inviteeEmail: input.inviteeEmail ?? null,
       inviteeUserId: input.inviteeUserId ?? null,
       invitedByUserId: input.invitedByUserId,
-      role: input.role as "Owner" | "Member",
+      role: input.role,
       workspaceId: input.workspaceId as WorkspaceId
     });
 
     await this.database
       .insertInto("workspace_invitations")
       .values({
-        accept_token: invitation.acceptToken,
+        accept_token: null,
+        accept_token_hash: invitation.acceptToken ? hashInvitationToken(invitation.acceptToken) : null,
         accepted_at: invitation.acceptedAt,
         accepted_by_user_id: invitation.acceptedByUserId,
         created_at: invitation.createdAt,
@@ -571,6 +616,8 @@ export class PostgresIdentityRepository {
         invited_by_user_id: invitation.invitedByUserId,
         project_id: invitation.projectId,
         role: invitation.role,
+        send_attempt_count: 0,
+        last_send_error: null,
         status: invitation.status,
         updated_at: invitation.updatedAt,
         workspace_id: invitation.workspaceId
@@ -598,6 +645,7 @@ export class PostgresIdentityRepository {
         .updateTable("workspace_invitations")
         .set({
           accept_token: nextInvitation.acceptToken,
+          accept_token_hash: null,
           accepted_at: nextInvitation.acceptedAt,
           accepted_by_user_id: nextInvitation.acceptedByUserId,
           status: nextInvitation.status,
@@ -660,12 +708,27 @@ export class PostgresIdentityRepository {
       .updateTable("workspace_invitations")
       .set({
         accept_token: invitation.acceptToken,
+        accept_token_hash: null,
         status: invitation.status,
         updated_at: invitation.updatedAt
       })
       .where("workspace_id", "=", workspaceId)
       .where("id", "=", invitationId)
       .where("project_id", "is", null)
+      .execute();
+  }
+
+  async markInvitationEmailDelivery(invitationId: string, input: { error: string | null }): Promise<void> {
+    const now = new Date().toISOString();
+    await this.database
+      .updateTable("workspace_invitations")
+      .set({
+        last_send_error: input.error,
+        send_attempt_count: sql`coalesce(send_attempt_count, 0) + 1`,
+        status: input.error ? "delivery_failed" : "pending",
+        updated_at: now
+      })
+      .where("id", "=", invitationId)
       .execute();
   }
 

@@ -891,6 +891,16 @@ export const getWorkspaceInvitations = async (workspaceSlug: string): Promise<Wo
   return invitations ?? [];
 };
 
+export const getWorkspaceInvitationsByStatus = async (
+  workspaceSlug: string,
+  status: WorkspaceInvitationDto["status"]
+): Promise<WorkspaceInvitationDto[]> => {
+  const invitations = await requestJson<WorkspaceInvitationDto[]>(
+    `/workspaces/${workspaceSlug}/invitations?status=${encodeURIComponent(status)}`
+  );
+  return invitations ?? [];
+};
+
 export const createWorkspaceInvitation = async (
   workspaceSlug: string,
   payload: {
@@ -936,6 +946,33 @@ export const removeWorkspaceMember = async (
   userId: string
 ): Promise<void> => {
   await requestJson(`/workspaces/${workspaceSlug}/members/${encodeURIComponent(userId)}`, {
+    method: "DELETE"
+  });
+};
+
+export const resendWorkspaceInvitation = async (
+  workspaceSlug: string,
+  invitationId: string
+): Promise<WorkspaceInvitationDto> => {
+  const invitation = await requestJson<WorkspaceInvitationDto>(
+    `/workspaces/${workspaceSlug}/invitations/${encodeURIComponent(invitationId)}/resend`,
+    {
+      method: "POST"
+    }
+  );
+
+  if (!invitation) {
+    throw new Error("Invitation resend returned no payload");
+  }
+
+  return invitation;
+};
+
+export const revokeWorkspaceInvitation = async (
+  workspaceSlug: string,
+  invitationId: string
+): Promise<void> => {
+  await requestJson(`/workspaces/${workspaceSlug}/invitations/${encodeURIComponent(invitationId)}`, {
     method: "DELETE"
   });
 };

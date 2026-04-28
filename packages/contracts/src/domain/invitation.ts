@@ -3,7 +3,7 @@ import { z } from "zod";
 import { projectRoleSchema } from "./project-role";
 import { workspaceRoleSchema } from "./member";
 
-export const invitationStatusSchema = z.enum(["pending", "accepted", "revoked", "expired"]);
+export const invitationStatusSchema = z.enum(["pending", "accepted", "revoked", "expired", "delivery_failed"]);
 
 export const workspaceInvitationSchema = z.object({
   id: z.string(),
@@ -20,7 +20,9 @@ export const workspaceInvitationSchema = z.object({
   updatedAt: z.string()
   ,
   expiresAt: z.string(),
-  acceptToken: z.string().nullable()
+  acceptToken: z.string().nullable(),
+  sendAttemptCount: z.number().int().nonnegative().default(0),
+  lastSendError: z.string().nullable().default(null)
 });
 
 export type InvitationStatus = z.infer<typeof invitationStatusSchema>;
