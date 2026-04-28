@@ -11,7 +11,11 @@ import { sanitizeReturnPath } from "@wevlo/auth";
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [emailEnabled, setEmailEnabled] = React.useState(false);
+  const [demoEnabled, setDemoEnabled] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [otpCode, setOtpCode] = React.useState("");
+  const [otpVisible, setOtpVisible] = React.useState(false);
+  const [isOtpSubmitting, setIsOtpSubmitting] = React.useState(false);
   const [formMessage, setFormMessage] = React.useState<string | null>(null);
   const searchParams = useSearchParams();
   const callbackUrl = React.useMemo(
@@ -22,6 +26,7 @@ export default function LoginPage() {
   React.useEffect(() => {
     void getProviders().then((providers) => {
       setEmailEnabled(Boolean(providers?.email));
+      setDemoEnabled(Boolean(providers?.credentials));
     });
   }, []);
 
@@ -32,25 +37,52 @@ export default function LoginPage() {
       setFormMessage(null);
       try {
         const normalizedEmail = email.trim().toLowerCase();
-        const statusResponse = await fetch(`/api/auth/email-status?email=${encodeURIComponent(normalizedEmail)}`, {
-          cache: "no-store"
-        });
-
-        if (!statusResponse.ok) {
-          setFormMessage("로그인을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.");
+        if (!normalizedEmail) {
+          setFormMessage("이메일을 입력해 주세요.");
           return;
         }
-
-        const payload = (await statusResponse.json()) as { exists: boolean };
-
-        if (!payload.exists) {
-          setFormMessage("가입되지 않은 이메일이에요. 회원가입 페이지에서 먼저 가입해 주세요.");
-          return;
-        }
-
         await signIn("email", { email: normalizedEmail, callbackUrl });
+        await fetch("/api/auth/email-otp/request", {
+          body: JSON.stringify({ email: normalizedEmail }),
+          headers: { "content-type": "application/json" },
+          method: "POST"
+        });
+        setOtpVisible(true);
+        setFormMessage("입력한 이메일로 인증 안내를 보냈어요. 메일함을 확인해 주세요.");
       } finally {
         setIsSubmitting(false);
+      }
+    })();
+  };
+
+  const handleOtpLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    void (async () => {
+      setIsOtpSubmitting(true);
+      setFormMessage(null);
+      try {
+        const normalizedEmail = email.trim().toLowerCase();
+        const code = otpCode.trim();
+        if (!normalizedEmail || !/^\d{6}$/.test(code)) {
+          setFormMessage("6자리 인증 코드를 입력해 주세요.");
+          return;
+        }
+
+        const result = await signIn("email-otp", {
+          callbackUrl,
+          code,
+          email: normalizedEmail,
+          redirect: false
+        });
+
+        if (!result || result.error) {
+          setFormMessage("인증 코드를 확인해 주세요.");
+          return;
+        }
+
+        window.location.assign(result.url ?? callbackUrl);
+      } finally {
+        setIsOtpSubmitting(false);
       }
     })();
   };
@@ -119,9 +151,24 @@ export default function LoginPage() {
                   required
                 />
                 <Button type="submit" className="w-full h-11 rounded-xl font-semibold">
-                  {isSubmitting ? "Checking..." : "Sign in with Email"}
+                  {isSubmitting ? "Sending..." : "Continue with Email"}
                 </Button>
               </form>
+              {otpVisible ? (
+                <form onSubmit={handleOtpLogin} className="space-y-3">
+                  <Input
+                    type="text"
+                    placeholder="6-digit code"
+                    className="h-11 rounded-xl bg-background/50 border-border/60 tracking-[0.2em] text-center"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    required
+                  />
+                  <Button type="submit" variant="secondary" className="w-full h-11 rounded-xl font-semibold">
+                    {isOtpSubmitting ? "Verifying..." : "Sign in with Code"}
+                  </Button>
+                </form>
+              ) : null}
               {formMessage ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
                   {formMessage}
@@ -134,7 +181,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="pt-4 space-y-3">
+          {demoEnabled ? (
+            <div className="pt-4 space-y-3">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">Demo Access</div>
             <div className="grid grid-cols-2 gap-3">
               <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("user_demo_owner")}>
@@ -144,12 +192,13 @@ export default function LoginPage() {
                 Developer
               </Button>
             </div>
-          </div>
+            </div>
+          ) : null}
         </CardContent>
         <div className="px-8 pb-8 text-center text-sm text-muted-foreground">
-          Don't have an account?{" "}
+          No account yet?{" "}
           <Link href="/signup" className="text-primary hover:underline font-medium">
-            Sign up
+            Continue here
           </Link>
         </div>
       </Card>

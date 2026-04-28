@@ -46,15 +46,39 @@ export async function getInternalAuthUserByEmail(email: string): Promise<UserDto
   return internalApiFetch<UserDto>(`/internal/auth/users/by-email/${encodeURIComponent(email)}`);
 }
 
+export async function createInternalAuthUser(input: { email: string; name?: string }): Promise<UserDto | null> {
+  return internalApiFetch<UserDto>("/internal/auth/users", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      ...(input.name ? { name: input.name } : {})
+    })
+  });
+}
+
+export async function createInternalVerificationToken(input: VerificationTokenDto): Promise<VerificationTokenDto | null> {
+  return internalApiFetch<VerificationTokenDto>("/internal/auth/verification-tokens", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export async function consumeInternalVerificationToken(input: {
+  identifier: string;
+  token: string;
+}): Promise<VerificationTokenDto | null> {
+  return internalApiFetch<VerificationTokenDto>("/internal/auth/verification-tokens/verify", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export function WevloAuthAdapter(): Adapter {
   return {
     async createUser(user: Omit<AdapterUser, "id">) {
-      const created = await internalApiFetch<UserDto>("/internal/auth/users", {
-        method: "POST",
-        body: JSON.stringify({
-          email: user.email,
-          name: user.name ?? undefined
-        })
+      const created = await createInternalAuthUser({
+        email: user.email,
+        ...(user.name ? { name: user.name } : {})
       });
 
       if (!created) {
@@ -106,13 +130,10 @@ export function WevloAuthAdapter(): Adapter {
     },
 
     async createVerificationToken(verificationToken) {
-      const created = await internalApiFetch<VerificationTokenDto>("/internal/auth/verification-tokens", {
-        method: "POST",
-        body: JSON.stringify({
-          identifier: verificationToken.identifier,
-          token: verificationToken.token,
-          expires: verificationToken.expires.toISOString()
-        })
+      const created = await createInternalVerificationToken({
+        identifier: verificationToken.identifier,
+        token: verificationToken.token,
+        expires: verificationToken.expires.toISOString()
       });
 
       if (!created) {
@@ -126,10 +147,7 @@ export function WevloAuthAdapter(): Adapter {
     },
 
     async useVerificationToken({ identifier, token }) {
-      const used = await internalApiFetch<VerificationTokenDto>("/internal/auth/verification-tokens/verify", {
-        method: "POST",
-        body: JSON.stringify({ identifier, token })
-      });
+      const used = await consumeInternalVerificationToken({ identifier, token });
 
       if (!used) {
         return null;

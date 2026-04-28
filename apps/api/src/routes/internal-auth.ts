@@ -77,6 +77,16 @@ const internalAuthRoutes: FastifyPluginAsync = async (fastify) => {
       userId: payload.userId
     });
 
+    await fastify.recordAudit({
+      action: "auth.identity.linked",
+      actorId: payload.userId,
+      payload: {
+        provider: payload.provider,
+        providerUserId: payload.providerUserId
+      },
+      resourceId: payload.userId
+    });
+
     return reply.send(user);
   });
 

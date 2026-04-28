@@ -12,7 +12,13 @@ import {
   isEmailAuthConfigured,
   isGoogleOAuthConfigured
 } from "@/lib/env";
-import { getInternalAuthUserById, WevloAuthAdapter } from "@/lib/auth-adapter";
+import {
+  consumeInternalVerificationToken,
+  createInternalAuthUser,
+  getInternalAuthUserByEmail,
+  getInternalAuthUserById,
+  WevloAuthAdapter
+} from "@/lib/auth-adapter";
 
 const devAuthEnabled = isDevAuthEnabled();
 const emailAuthConfigured = isEmailAuthConfigured();
@@ -55,9 +61,68 @@ if (emailAuthConfigured) {
 if (isGoogleOAuthConfigured()) {
   providers.push(
     Google({
-      allowDangerousEmailAccountLinking: true,
       clientId: process.env.AUTH_GOOGLE_ID!,
       clientSecret: process.env.AUTH_GOOGLE_SECRET!
+    })
+  );
+}
+
+if (emailAuthConfigured) {
+  providers.push(
+    Credentials({
+      credentials: {
+        code: {
+          label: "Code",
+          type: "text"
+        },
+        email: {
+          label: "Email",
+          type: "email"
+        }
+      },
+      async authorize(credentials) {
+        const normalizedEmail = typeof credentials?.email === "string"
+          ? credentials.email.trim().toLowerCase()
+          : "";
+        const code = typeof credentials?.code === "string" ? credentials.code.trim() : "";
+
+        if (!normalizedEmail || !/^\d{6}$/.test(code)) {
+          return null;
+        }
+
+        const consumed = await consumeInternalVerificationToken({
+          identifier: `otp:${normalizedEmail}`,
+          token: code
+        });
+
+        if (!consumed) {
+          return null;
+        }
+
+        const user =
+          await getInternalAuthUserByEmail(normalizedEmail)
+          ?? await createInternalAuthUser({
+            email: normalizedEmail,
+            ...(normalizedEmail.includes("@") ? { name: normalizedEmail.split("@")[0] } : {})
+          });
+
+        if (!user) {
+          return null;
+        }
+
+        return {
+          defaultWorkspaceSlug: null,
+          email: user.email,
+          id: user.id,
+          name: user.name,
+          provider: "email",
+          providerUserId: normalizedEmail,
+          role: "Member" as WorkspaceRole,
+          workspaceSlugs: []
+        };
+      },
+      id: "email-otp",
+      name: "Email OTP"
     })
   );
 }
@@ -109,7 +174,11 @@ export const authOptions: NextAuthOptions = {
         token.avatarUrl = providerAvatarUrl ?? token.avatarUrl ?? null;
         token.email = user.email ?? null;
         token.name = user.name ?? null;
-        token.provider = account.provider === "credentials" ? "dev" : (account.provider === "email" ? "email" : "google");
+        if (account.provider === "credentials") {
+          token.provider = (user as { provider?: "dev" | "email" }).provider ?? "dev";
+        } else {
+          token.provider = account.provider === "email" ? "email" : "google";
+        }
         token.providerUserId = account.providerAccountId
           ?? (user as { providerUserId?: string }).providerUserId
           ?? String(user.id);
