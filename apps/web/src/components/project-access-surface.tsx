@@ -43,6 +43,14 @@ type ProjectAccessSurfaceProps = {
 
 const projectRoles: ProjectRole[] = ["Owner", "Maintainer", "Developer", "Planner", "Guest"];
 
+const roleHierarchy: Record<ProjectRole, number> = {
+  Owner: 0,
+  Maintainer: 1,
+  Developer: 2,
+  Planner: 3,
+  Guest: 4
+};
+
 const selectClassName =
   "flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -60,6 +68,8 @@ export const ProjectAccessSurface = ({
   const [selectedRole, setSelectedRole] = useState<ProjectRole>("Developer");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const currentUserLevel = roleHierarchy[project.currentUserRole];
 
   const memberIds = useMemo(() => new Set(members.map((member) => member.userId)), [members]);
   const availableWorkspaceMembers = useMemo(
@@ -195,11 +205,15 @@ export const ProjectAccessSurface = ({
                     onChange={(event) => setSelectedRole(event.target.value as ProjectRole)}
                     className={selectClassName}
                   >
-                    {projectRoles.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
+                    {projectRoles.map((role) => {
+                      const roleLevel = roleHierarchy[role];
+                      const isDisabled = project.currentUserRole !== "Owner" && roleLevel <= currentUserLevel;
+                      return (
+                        <option key={role} value={role} disabled={isDisabled}>
+                          {role} {isDisabled ? "(Higher than your role)" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
                 <Button
@@ -263,19 +277,23 @@ export const ProjectAccessSurface = ({
                       value={member.role}
                       onChange={(event) => void handleUpsert(member.userId, event.target.value as ProjectRole)}
                       className={cn(selectClassName, "sm:w-44")}
-                      disabled={isSaving}
+                      disabled={isSaving || (project.currentUserRole !== "Owner" && roleHierarchy[member.role] <= currentUserLevel)}
                     >
-                      {projectRoles.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
+                      {projectRoles.map((role) => {
+                        const roleLevel = roleHierarchy[role];
+                        const isDisabled = project.currentUserRole !== "Owner" && roleLevel <= currentUserLevel;
+                        return (
+                          <option key={role} value={role} disabled={isDisabled}>
+                            {role}
+                          </option>
+                        );
+                      })}
                     </select>
                     <Button
                       variant="outline"
                       className="border-destructive/35 text-destructive hover:bg-destructive/10"
                       onClick={() => void handleRemove(member.userId)}
-                      disabled={isSaving}
+                      disabled={isSaving || (project.currentUserRole !== "Owner" && roleHierarchy[member.role] <= currentUserLevel)}
                     >
                       Remove
                     </Button>

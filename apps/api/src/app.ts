@@ -2479,6 +2479,26 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return;
     }
 
+    const projectRoleHierarchy: Record<ProjectRole, number> = {
+      Owner: 0,
+      Maintainer: 1,
+      Developer: 2,
+      Planner: 3,
+      Guest: 4
+    };
+
+    const existingMembers = await listProjectMembersUseCase(projectCollaborationRepository, project.id);
+    const targetMember = existingMembers.find((m) => m.userId === params.userId);
+
+    // Enforcement: Cannot remove a member with a role higher or equal to your own (except Owners)
+    if (
+      targetMember &&
+      project.currentUserRole !== "Owner" &&
+      projectRoleHierarchy[targetMember.role] <= projectRoleHierarchy[project.currentUserRole]
+    ) {
+      return sendError(reply, 403, "project.forbidden", "Cannot remove a member with a role higher or equal to your own");
+    }
+
     if (params.userId === currentUser.id) {
       return sendError(reply, 400, "workspace.cannot_remove_self", "You cannot remove yourself from the workspace");
     }
@@ -3015,11 +3035,38 @@ export const buildApi = ({ database }: ApiDependencies) => {
       return sendError(reply, 403, "project.forbidden", "Project member management denied");
     }
 
+    const projectRoleHierarchy: Record<ProjectRole, number> = {
+      Owner: 0,
+      Maintainer: 1,
+      Developer: 2,
+      Planner: 3,
+      Guest: 4
+    };
+
+    // Enforcement: Cannot assign a role higher or equal to your own (except Owners)
+    if (
+      project.currentUserRole !== "Owner" &&
+      projectRoleHierarchy[payload.role] <= projectRoleHierarchy[project.currentUserRole]
+    ) {
+      return sendError(reply, 403, "project.forbidden", "Cannot assign a role higher or equal to your own");
+    }
+
     if (!(await projectRepository.isWorkspaceMember(workspace.id, params.userId))) {
       return sendError(reply, 403, "workspace.membership_required", "Workspace membership required");
     }
 
     const existingMembers = await listProjectMembersUseCase(projectCollaborationRepository, project.id);
+    const targetMember = existingMembers.find((m) => m.userId === params.userId);
+
+    // Enforcement: Cannot modify a member with a role higher or equal to your own (except Owners)
+    if (
+      targetMember &&
+      project.currentUserRole !== "Owner" &&
+      projectRoleHierarchy[targetMember.role] <= projectRoleHierarchy[project.currentUserRole]
+    ) {
+      return sendError(reply, 403, "project.forbidden", "Cannot modify a member with a role higher or equal to your own");
+    }
+
     const member = await runInTransaction(database, async (trx) => {
       const scoped = createScopedRepositories(trx);
       const createdMember = await createProjectMemberUseCase(scoped.projectCollaborationRepository, {

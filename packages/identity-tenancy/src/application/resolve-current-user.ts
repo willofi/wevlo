@@ -30,5 +30,16 @@ export const resolveCurrentUserUseCase = async (
     return existing;
   }
 
-  return repository.createUserWithIdentity(input);
+  // 1. 구글이나 이메일 인증을 통한 가입은 언제나 허용합니다. (실제 인증이 완료된 상태)
+  if (input.provider === "google" || input.provider === "email") {
+    return repository.createUserWithIdentity(input);
+  }
+
+  // 2. 데모(dev) 프로바이더의 경우, 미리 정의된 데모 사용자 ID인 경우만 자동 생성을 허용합니다.
+  const allowedDemoIds = ["user_demo_owner", "user-ava", "user-noah", "user-kim", "user-lucas"];
+  if (input.provider === "dev" && allowedDemoIds.includes(input.providerUserId)) {
+    return repository.createUserWithIdentity(input);
+  }
+
+  throw new Error(`Unauthorized: User creation not allowed for provider ${input.provider} with ID ${input.providerUserId}`);
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ListTodo, Menu, Search, SquareDashedMousePointer } from "lucide-react";
+import { ListTodo, Menu, Search, SquareDashedMousePointer, UserPlus } from "lucide-react";
 import { HiOutlineChevronDoubleRight } from "react-icons/hi2";
 import { Fragment, useMemo, useState, type PropsWithChildren, type ReactNode } from "react";
 
@@ -10,6 +10,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbS
 import { AccountMenu } from "@/components/account-menu";
 import { useAppPreferences } from "@/components/app-preferences-provider";
 import { GlobalWorkspaceActions, type WorkspaceActionsContext } from "@/components/global-workspace-actions";
+import { InviteMemberDialog } from "@/components/invite-member-dialog";
 import { NotificationSummaryProvider } from "@/components/notification-summary-provider";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { PersonalNav } from "@/components/personal-nav";
@@ -113,6 +114,7 @@ export function AppShell({
   workspaces
 }: AppShellProps) {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const { preferences, setPreference } = useAppPreferences();
   const isCompact = preferences.density === "compact";
   const headerMyIssuesHref = getMyIssuesHref();
@@ -140,6 +142,19 @@ export function AppShell({
         />
         <PersonalNav />
         {sidebar ? <div className="space-y-5">{sidebar}</div> : null}
+
+        {currentWorkspaceSlug && (
+          <div className="mt-auto pt-4 border-t border-sidebar-foreground/10">
+            <button
+              type="button"
+              onClick={() => setIsInviteDialogOpen(true)}
+              className="inline-flex h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-foreground group"
+            >
+              <UserPlus className="size-3.5 transition-colors group-hover:text-primary" />
+              Invite people
+            </button>
+          </div>
+        )}
       </>
     ),
     [currentWorkspaceSlug, homePanel, sidebar, workspaces]
@@ -173,6 +188,13 @@ export function AppShell({
   return (
     <NotificationSummaryProvider>
       <div className="h-screen overflow-hidden bg-background text-foreground">
+        {currentWorkspaceSlug && (
+          <InviteMemberDialog
+            workspaceSlug={currentWorkspaceSlug}
+            open={isInviteDialogOpen}
+            onOpenChange={setIsInviteDialogOpen}
+          />
+        )}
         <div
           className={cn(
             "h-screen lg:grid",

@@ -1124,12 +1124,12 @@ export const getInboxHref = (options?: {
 
 export const getWorkspaceHref = (workspaceSlug: string): string => `/${workspaceSlug}`;
 
-export const getWorkspaceMembersHref = (workspaceSlug: string): string => `/${workspaceSlug}/members`;
+export const getWorkspaceMembersHref = (workspaceSlug: string): string => `/${workspaceSlug}/settings/members`;
 
 export const getWorkspaceMemberHref = (workspaceSlug: string, userId: string): string =>
   `/${workspaceSlug}/members/${encodeURIComponent(userId)}`;
 
-export const getWorkspaceAccessHref = (workspaceSlug: string): string => `/${workspaceSlug}/access`;
+export const getWorkspaceAccessHref = (workspaceSlug: string): string => `/${workspaceSlug}/settings/access`;
 
 export const getWorkspaceIntegrationsHref = (workspaceSlug: string): string => `/${workspaceSlug}/integrations`;
 
