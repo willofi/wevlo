@@ -26,6 +26,7 @@ import {
   uploadProfileAvatar
 } from "@/lib/issue-hub-data";
 import { isRequestStatus } from "@/lib/request-error";
+import { notifyError, notifySuccess } from "@/lib/action-feedback";
 
 const handlePattern = /^[a-z0-9_]{3,32}$/;
 
@@ -108,7 +109,6 @@ export function ProfileEditorForm({
   const [handle, setHandle] = useState(user.handle);
   const [savedUser, setSavedUser] = useState(user);
   const [handleStatus, setHandleStatus] = useState<HandleStatus>({ tone: "idle" });
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSaving, startSaveTransition] = useTransition();
@@ -192,20 +192,19 @@ export function ProfileEditorForm({
     setName(nextUser.name);
     setHandle(nextUser.handle);
     setSaveError(null);
-    setSaveMessage(successMessage);
+    notifySuccess(successMessage);
   };
 
   const handleAvatarUpload = async (file: File) => {
     setIsUploadingAvatar(true);
     setSaveError(null);
-    setSaveMessage(null);
 
     try {
       const updatedUser = await uploadProfileAvatar(file);
       applySavedUser(updatedUser);
       router.refresh();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Profile image upload failed.");
+      notifyError(error, "Profile image upload failed.");
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -214,14 +213,13 @@ export function ProfileEditorForm({
   const handleAvatarRemove = async () => {
     setIsUploadingAvatar(true);
     setSaveError(null);
-    setSaveMessage(null);
 
     try {
       const updatedUser = await removeProfileAvatar();
       applySavedUser(updatedUser);
       router.refresh();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Profile image removal failed.");
+      notifyError(error, "Profile image removal failed.");
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -232,7 +230,6 @@ export function ProfileEditorForm({
     const nextHandle = normalizedHandle;
 
     setSaveError(null);
-    setSaveMessage(null);
 
     if (trimmedName.length === 0) {
       setSaveError("Full name cannot be empty.");
@@ -382,7 +379,6 @@ export function ProfileEditorForm({
                 onChange={(event) => {
                   setName(event.target.value);
                   setSaveError(null);
-                  setSaveMessage(null);
                 }}
                 placeholder="Your full name"
                 className="h-11 rounded-2xl"
@@ -409,7 +405,6 @@ export function ProfileEditorForm({
                       setHandle(event.target.value.toLowerCase().replace(/\s+/g, "_"));
                       setHandleStatus({ tone: "idle" });
                       setSaveError(null);
-                      setSaveMessage(null);
                     }}
                     placeholder="mention_name"
                     className="h-11 rounded-2xl pl-11"
@@ -430,7 +425,6 @@ export function ProfileEditorForm({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           {saveError ? <div className="text-sm font-medium text-destructive">{saveError}</div> : null}
-          {!saveError && saveMessage ? <div className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{saveMessage}</div> : null}
           <div className="text-xs leading-5 text-muted-foreground">{submitNote}</div>
         </div>
         <Button type="button" onClick={handleSave} disabled={!hasChanges || isSaving} className="min-w-32 rounded-full">

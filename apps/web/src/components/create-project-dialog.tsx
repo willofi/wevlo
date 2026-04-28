@@ -16,6 +16,7 @@ import {
 } from "@wevlo/ui-web";
 
 import { buildProjectKeyCandidatesClient, normalizeProjectKeyClient } from "@/lib/client-slug";
+import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import { createProject, getProjectHref, waitForProjectRead } from "@/lib/issue-hub-data";
 
 type CreateProjectDialogProps = {
@@ -33,7 +34,6 @@ export function CreateProjectDialog({
   const [name, setName] = useState("");
   const [keyOverride, setKeyOverride] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const keyPreview = useMemo(() => {
@@ -48,7 +48,6 @@ export function CreateProjectDialog({
     setName("");
     setKeyOverride("");
     setShowAdvanced(false);
-    setError(null);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -60,8 +59,6 @@ export function CreateProjectDialog({
   };
 
   const handleSubmit = () => {
-    setError(null);
-
     startTransition(() => {
       void (async () => {
         try {
@@ -71,11 +68,12 @@ export function CreateProjectDialog({
           });
 
           await waitForProjectRead(workspaceSlug, project.key);
+          notifySuccess("Project created.");
           handleOpenChange(false);
           router.push(getProjectHref(workspaceSlug, project.key));
           router.refresh();
         } catch (submitError) {
-          setError(submitError instanceof Error ? submitError.message : "Project creation failed.");
+          notifyError(submitError, "Project creation failed.");
         }
       })();
     });
@@ -125,8 +123,6 @@ export function CreateProjectDialog({
               />
             </div>
           ) : null}
-
-          {error ? <div className="text-sm text-destructive">{error}</div> : null}
         </div>
 
         <DialogFooter>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 
 import {
   Button,
@@ -14,6 +13,7 @@ import {
   Input
 } from "@wevlo/ui-web";
 import { createWorkspaceInvitation } from "@/lib/issue-hub-data";
+import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import type { WorkspaceInvitationResult } from "@wevlo/contracts";
 
 const describeInviteFailure = (failure: WorkspaceInvitationResult): string => {
@@ -42,7 +42,6 @@ export function InviteMemberDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [emailInput, setEmailInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -57,7 +56,6 @@ export function InviteMemberDialog({
 
     try {
       setIsSaving(true);
-      setError(null);
       const results = await createWorkspaceInvitation(workspaceSlug, {
         emails,
         role: "Member"
@@ -65,6 +63,7 @@ export function InviteMemberDialog({
       const failures = results.filter((result) => result.status === "failed");
 
       if (failures.length === 0) {
+        notifySuccess("Invitations sent.");
         setSuccess(true);
         setTimeout(() => {
           onOpenChange(false);
@@ -74,14 +73,15 @@ export function InviteMemberDialog({
       } else {
         const failureSummary = failures.slice(0, 3).map(describeInviteFailure).join(" / ");
         const hasMore = failures.length > 3 ? ` (+${failures.length - 3} more)` : "";
-        setError(`${failures.length} invitation(s) failed: ${failureSummary}${hasMore}`);
+        notifyError(new Error(`${failures.length} invitation(s) failed: ${failureSummary}${hasMore}`), "Invitation failed.");
         if (failures.length < results.length) {
+          notifySuccess("Some invitations were sent.");
           setSuccess(true);
           setTimeout(() => setSuccess(false), 2000);
         }
       }
     } catch (inviteError) {
-      setError(inviteError instanceof Error ? inviteError.message : "Invitation failed");
+      notifyError(inviteError, "Invitation failed.");
     } finally {
       setIsSaving(false);
     }
@@ -115,22 +115,12 @@ export function InviteMemberDialog({
           <div className="text-[11px] text-muted-foreground/60 italic">
             New members will be invited with the "Member" role by default. Roles can be changed later in workspace settings.
           </div>
-          {error ? (
-            <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-500">
-              {error}
-            </div>
-          ) : null}
           <DialogFooter className="mt-4">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isSaving || success}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving || success || !emailInput.trim()} className="min-w-32 rounded-xl">
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : success ? (
+              {isSaving ? "Sending..." : success ? (
                 "Sent!"
               ) : (
                 "Send invites"

@@ -17,6 +17,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 
 import { AppShell } from "@/components/app-shell";
 import { ProjectSidebarNav } from "@/components/project-sidebar-nav";
+import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import {
   createProjectIntegrationLink,
   createWorkspaceIntegrationInstallation,
@@ -61,8 +62,7 @@ export function ProjectIntegrationsSurface({
   const [installations, setInstallations] = useState(initialInstallations);
   const [links, setLinks] = useState(initialLinks);
   const [syncStatuses, setSyncStatuses] = useState(initialSyncStatuses);
-  const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [busyAction, setBusyAction] = useState<"installation" | "link" | "import" | null>(null);
 
   const [installationProvider, setInstallationProvider] = useState<"github" | "gitlab">("github");
   const [installationForm, setInstallationForm] = useState<CreateIntegrationInstallationRequest>({
@@ -82,7 +82,7 @@ export function ProjectIntegrationsSurface({
 
   const [importProvider, setImportProvider] = useState<"github" | "gitlab">("github");
   const [importJson, setImportJson] = useState<string>("[]");
-  const [importSummary, setImportSummary] = useState<string | null>(null);
+  const isBusy = busyAction !== null;
 
   const refreshProjectIntegrations = async () => {
     const result = await getProjectIntegrations(workspace.slug, project.key);
@@ -92,8 +92,7 @@ export function ProjectIntegrationsSurface({
 
   const handleCreateInstallation = async () => {
     try {
-      setIsSaving(true);
-      setError(null);
+      setBusyAction("installation");
       const installation = await createWorkspaceIntegrationInstallation(
         workspace.slug,
         installationProvider,
@@ -110,17 +109,17 @@ export function ProjectIntegrationsSurface({
         externalAccountSlug: "",
         webhookSecret: ""
       });
+      notifySuccess("Integration installation created.");
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Integration installation creation failed");
+      notifyError(createError, "Integration installation creation failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
   const handleCreateLink = async () => {
     try {
-      setIsSaving(true);
-      setError(null);
+      setBusyAction("link");
       const link = await createProjectIntegrationLink(workspace.slug, project.key, linkProvider, linkForm);
       setLinks((current) => [...current.filter((candidate) => candidate.id !== link.id), link]);
       await refreshProjectIntegrations();
@@ -130,27 +129,27 @@ export function ProjectIntegrationsSurface({
         installationId: linkForm.installationId,
         sourceOfTruth: "remote"
       });
+      notifySuccess("Project link created.");
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Integration project link creation failed");
+      notifyError(createError, "Integration project link creation failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
   const handleImport = async () => {
     try {
-      setIsSaving(true);
-      setError(null);
+      setBusyAction("import");
       const payload = JSON.parse(importJson) as ImportIntegrationProjectIssuesRequest["issues"];
       const response = await importProjectIntegrationIssues(workspace.slug, project.key, importProvider, {
         issues: payload
       });
-      setImportSummary(`Imported ${response.importedCount} issue${response.importedCount === 1 ? "" : "s"} from ${importProvider}.`);
+      notifySuccess(`Imported ${response.importedCount} issue${response.importedCount === 1 ? "" : "s"} from ${importProvider}.`);
       await refreshProjectIntegrations();
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : "Integration import failed");
+      notifyError(importError, "Integration import failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
@@ -236,8 +235,8 @@ export function ProjectIntegrationsSurface({
                 placeholder="Webhook secret"
                 type="password"
               />
-              <Button onClick={() => void handleCreateInstallation()} disabled={isSaving || installationForm.externalAccountId.trim().length === 0}>
-                {isSaving ? "Saving..." : "Create installation"}
+              <Button onClick={() => void handleCreateInstallation()} disabled={isBusy || installationForm.externalAccountId.trim().length === 0}>
+                {busyAction === "installation" ? "Saving..." : "Create installation"}
               </Button>
             </CardContent>
           </Card>
@@ -311,13 +310,13 @@ export function ProjectIntegrationsSurface({
               <Button
                 onClick={() => void handleCreateLink()}
                 disabled={
-                  isSaving ||
+                  isBusy ||
                   linkForm.installationId.trim().length === 0 ||
                   linkForm.externalProjectId.trim().length === 0 ||
                   linkForm.externalProjectPath.trim().length === 0
                 }
               >
-                {isSaving ? "Saving..." : "Create project link"}
+                {busyAction === "link" ? "Saving..." : "Create project link"}
               </Button>
             </CardContent>
           </Card>
@@ -342,13 +341,11 @@ export function ProjectIntegrationsSurface({
                 placeholder='[{"externalId":"1","externalProjectId":"123","title":"Broken sync","description":"","state":"open","authorId":"octocat","comments":[]}]'
                 className="min-h-52"
               />
-              <Button onClick={() => void handleImport()} disabled={isSaving}>
-                {isSaving ? "Importing..." : "Import issues"}
+              <Button onClick={() => void handleImport()} disabled={isBusy}>
+                {busyAction === "import" ? "Importing..." : "Import issues"}
               </Button>
-              {importSummary ? <div className="text-sm text-muted-foreground">{importSummary}</div> : null}
             </CardContent>
           </Card>
-          {error ? <div className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
         </div>
 
         <div className="grid gap-6">

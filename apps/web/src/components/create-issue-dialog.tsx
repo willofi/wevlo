@@ -35,6 +35,7 @@ import {
 } from "@wevlo/ui-web";
 
 import { DropdownSearchInput, MetadataPill } from "@/components/issue-metadata-primitives";
+import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import {
   buildProjectStateOptions,
   endOfWeek,
@@ -93,7 +94,6 @@ export function CreateIssueDialog({
   const [labelSearch, setLabelSearch] = useState("");
   const [newLabelName, setNewLabelName] = useState("");
   const [isCreatingLabel, setIsCreatingLabel] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const getWorkspaceMentionHref = useCallback(
@@ -193,7 +193,6 @@ export function CreateIssueDialog({
     setAssigneeSearch("");
     setLabelSearch("");
     setNewLabelName("");
-    setError(null);
     setAttachmentError(null);
 
     if (!options?.keepProject) {
@@ -217,11 +216,10 @@ export function CreateIssueDialog({
     }
 
     if (!selectedProjectKey) {
-      setError("프로젝트를 먼저 선택해 주세요.");
+      notifyError(new Error("프로젝트를 먼저 선택해 주세요."), "Please select a project first.");
       return;
     }
 
-    setError(null);
     setAttachmentError(null);
 
     startTransition(() => {
@@ -249,7 +247,11 @@ export function CreateIssueDialog({
           }
 
           if (attachmentFailure) {
-            setAttachmentError(`이슈 ${created.issueKey}는 생성됐지만 일부 첨부 업로드가 실패했습니다: ${attachmentFailure}`);
+            const message = `이슈 ${created.issueKey}는 생성됐지만 일부 첨부 업로드가 실패했습니다: ${attachmentFailure}`;
+            setAttachmentError(message);
+            notifyError(new Error(message), "Issue created, but some attachments failed.");
+          } else {
+            notifySuccess(`Issue ${created.issueKey} created.`);
           }
 
           onCreated(created, selectedProjectKey, attachmentFailure ? { keepComposerOpen: true } : undefined);
@@ -263,7 +265,7 @@ export function CreateIssueDialog({
             reset();
           }
         } catch (submitError) {
-          setError(submitError instanceof Error ? submitError.message : "Issue creation failed.");
+          notifyError(submitError, "Issue creation failed.");
         }
       })();
     });
@@ -277,11 +279,10 @@ export function CreateIssueDialog({
     }
 
     if (!selectedProjectKey) {
-      setError("라벨을 추가하려면 프로젝트를 먼저 선택해 주세요.");
+      notifyError(new Error("라벨을 추가하려면 프로젝트를 먼저 선택해 주세요."), "Please select a project before adding labels.");
       return;
     }
 
-    setError(null);
     setIsCreatingLabel(true);
 
     try {
@@ -300,8 +301,9 @@ export function CreateIssueDialog({
       setSelectedLabelIds((current) => [...new Set([...current, createdLabel.id])]);
       setNewLabelName("");
       setLabelSearch("");
+      notifySuccess(`Label "${createdLabel.name}" created.`);
     } catch (labelError) {
-      setError(labelError instanceof Error ? labelError.message : "Label creation failed.");
+      notifyError(labelError, "Label creation failed.");
     } finally {
       setIsCreatingLabel(false);
     }
@@ -538,7 +540,6 @@ export function CreateIssueDialog({
               </div>
             ) : null}
 
-            {error ? <div className="text-sm text-destructive">{error}</div> : null}
             {attachmentError ? <div className="text-sm text-destructive">{attachmentError}</div> : null}
 
             <div className="flex items-center justify-between gap-4">

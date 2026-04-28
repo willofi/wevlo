@@ -560,7 +560,20 @@ export class PostgresIssueRepository implements IssueRepository {
   }
 
   async save(issue: Issue): Promise<void> {
-    await this.persistIssue(this.database, issue);
+    console.info(`Saving issue ${issue.issueKey} (${issue.id})`);
+
+    if (this.isTransactionExecutor(this.database)) {
+      await this.persistIssue(this.database, issue);
+      return;
+    }
+
+    await this.database.transaction().execute(async (trx) => {
+      await this.persistIssue(trx, issue);
+    });
+  }
+
+  private isTransactionExecutor(executor: DatabaseExecutor): executor is DatabaseExecutor & { isTransaction: true } {
+    return "isTransaction" in executor && executor.isTransaction === true;
   }
 
   private async persistIssue(executor: DatabaseExecutor, issue: Issue): Promise<void> {

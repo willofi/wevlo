@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 
 import { AppQueryProvider } from "@/components/app-query-provider";
+import { AppToaster } from "@/components/app-toaster";
 import { AppPreferencesProvider } from "@/components/app-preferences-provider";
 import { APP_PREFERENCES_COOKIE, parseAppPreferences } from "@/lib/app-preferences-shared";
 
@@ -74,7 +75,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           }}
         />
         <AppQueryProvider>
-          <AppPreferencesProvider>{children}</AppPreferencesProvider>
+          <AppPreferencesProvider>
+            {children}
+            <AppToaster />
+          </AppPreferencesProvider>
         </AppQueryProvider>
       </body>
     </html>

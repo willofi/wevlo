@@ -16,6 +16,7 @@ import {
 } from "@wevlo/ui-web";
 
 import { normalizeWorkspaceSlugClient } from "@/lib/client-slug";
+import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import { createWorkspace, getWorkspaceHref, waitForWorkspaceRead } from "@/lib/issue-hub-data";
 
 type CreateWorkspaceDialogProps = {
@@ -31,7 +32,6 @@ export function CreateWorkspaceDialog({
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const slugPreview = useMemo(
@@ -43,7 +43,6 @@ export function CreateWorkspaceDialog({
     setName("");
     setSlug("");
     setShowAdvanced(false);
-    setError(null);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -55,8 +54,6 @@ export function CreateWorkspaceDialog({
   };
 
   const handleSubmit = () => {
-    setError(null);
-
     startTransition(() => {
       void (async () => {
         try {
@@ -66,11 +63,12 @@ export function CreateWorkspaceDialog({
           });
 
           await waitForWorkspaceRead(workspace.slug);
+          notifySuccess("Workspace created.");
           handleOpenChange(false);
           router.push(getWorkspaceHref(workspace.slug));
           router.refresh();
         } catch (submitError) {
-          setError(submitError instanceof Error ? submitError.message : "Workspace creation failed.");
+          notifyError(submitError, "Workspace creation failed.");
         }
       })();
     });
@@ -120,8 +118,6 @@ export function CreateWorkspaceDialog({
               />
             </div>
           ) : null}
-
-          {error ? <div className="text-sm text-destructive">{error}</div> : null}
         </div>
 
         <DialogFooter>

@@ -12,7 +12,8 @@ import type {
 } from "@wevlo/contracts";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, cn, Input } from "@wevlo/ui-web";
 
-import { PageState, pageStateButtonStyle, pageStateLinkStyle } from "@/components/page-state";
+import { PageState, pageStateButtonStyle } from "@/components/page-state";
+import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import {
   createWorkspaceInvitation,
   getInviteHref,
@@ -70,9 +71,7 @@ export const WorkspaceMembersSurface = ({
 }: WorkspaceMembersSurfaceProps) => {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<WorkspaceRole>("Member");
-  const [error, setError] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [members, setMembers] = useState(initialMembers);
 
@@ -84,6 +83,7 @@ export const WorkspaceMembersSurface = ({
   const currentUserRole = currentUserMembership?.role ?? "Guest";
   const isOwner = currentUserRole === "Owner";
   const canInvite = currentUserRole === "Owner" || currentUserRole === "Maintainer";
+  const isBusy = busyAction !== null;
 
   const pendingInvitations = useMemo(
     () => invitations.filter((invitation) => invitation.status === "pending" || invitation.status === "delivery_failed"),
@@ -97,9 +97,7 @@ export const WorkspaceMembersSurface = ({
 
   const handleInvite = async () => {
     try {
-      setIsSaving(true);
-      setError(null);
-      setStatusMessage(null);
+      setBusyAction("invite");
       const emails = email
         .split(",")
         .map((value) => value.trim())
@@ -117,12 +115,12 @@ export const WorkspaceMembersSurface = ({
       if (failedCount > 0) {
         const failureSummary = failures.slice(0, 3).map(describeInviteFailure).join(" / ");
         const hasMore = failures.length > 3 ? ` (+${failures.length - 3} more)` : "";
-        setError(`${failedCount} invitation(s) failed: ${failureSummary}${hasMore}`);
+        notifyError(new Error(`${failedCount} invitation(s) failed: ${failureSummary}${hasMore}`), "Some invitations failed.");
       }
 
       setEmail("");
       setRole("Member");
-      setStatusMessage(`Created ${createdCount}, already members ${alreadyMemberCount}, failed ${failedCount}.`);
+      notifySuccess(`Created ${createdCount}, already members ${alreadyMemberCount}, failed ${failedCount}.`);
       setInvitations((current) => [
         ...current,
         ...results
@@ -151,29 +149,28 @@ export const WorkspaceMembersSurface = ({
           })
       ]);
     } catch (inviteError) {
-      setError(inviteError instanceof Error ? inviteError.message : "Invitation failed");
+      notifyError(inviteError, "Invitation failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
   const handleResendInvitation = async (invitationId: string) => {
     try {
-      setIsSaving(true);
-      setError(null);
+      setBusyAction(`resend:${invitationId}`);
       const updated = await resendWorkspaceInvitation(workspace.slug, invitationId);
       setInvitations((current) => current.map((item) => (item.id === invitationId ? updated : item)));
+      notifySuccess("Invitation resent.");
     } catch (resendError) {
-      setError(resendError instanceof Error ? resendError.message : "Invitation resend failed");
+      notifyError(resendError, "Invitation resend failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
   const handleRevokeInvitation = async (invitationId: string) => {
     try {
-      setIsSaving(true);
-      setError(null);
+      setBusyAction(`revoke:${invitationId}`);
       await revokeWorkspaceInvitation(workspace.slug, invitationId);
       setInvitations((current) =>
         current.map((item) =>
@@ -187,23 +184,24 @@ export const WorkspaceMembersSurface = ({
             : item
         )
       );
+      notifySuccess("Invitation canceled.");
     } catch (revokeError) {
-      setError(revokeError instanceof Error ? revokeError.message : "Invitation cancel failed");
+      notifyError(revokeError, "Invitation cancel failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
   const handleUpdateRole = async (userId: string, newRole: WorkspaceRole) => {
     try {
-      setIsSaving(true);
-      setError(null);
+      setBusyAction(`role:${userId}`);
       const updatedMember = await updateWorkspaceMember(workspace.slug, userId, { role: newRole });
       setMembers((current) => current.map((m) => (m.userId === userId ? updatedMember : m)));
+      notifySuccess("Member role updated.");
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Role update failed");
+      notifyError(updateError, "Role update failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
@@ -213,14 +211,14 @@ export const WorkspaceMembersSurface = ({
     }
 
     try {
-      setIsSaving(true);
-      setError(null);
+      setBusyAction(`remove:${userId}`);
       await removeWorkspaceMember(workspace.slug, userId);
       setMembers((current) => current.filter((m) => m.userId !== userId));
+      notifySuccess("Member removed.");
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Member removal failed");
+      notifyError(removeError, "Member removal failed.");
     } finally {
-      setIsSaving(false);
+      setBusyAction(null);
     }
   };
 
@@ -256,15 +254,9 @@ export const WorkspaceMembersSurface = ({
                 );
               })}
             </select>
-            <Button type="button" onClick={handleInvite} disabled={isSaving || email.length === 0}>
-              {isSaving ? "Sending invite..." : "Send invitation"}
+            <Button type="button" onClick={handleInvite} disabled={isBusy || email.length === 0}>
+              {busyAction === "invite" ? "Sending invite..." : "Send invitation"}
             </Button>
-            {error ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
-            ) : null}
-            {statusMessage ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{statusMessage}</div>
-            ) : null}
           </CardContent>
         </Card>
       )}
@@ -309,7 +301,7 @@ export const WorkspaceMembersSurface = ({
                           onChange={(e) => void handleUpdateRole(member.userId, e.target.value as WorkspaceRole)}
                           className={cn(selectClassName, "h-8 w-32 text-[11px] py-0")}
                           disabled={
-                            isSaving ||
+                            isBusy ||
                             (!isOwner && roleHierarchy[member.role] <= roleHierarchy[currentUserRole])
                           }
                         >
@@ -328,7 +320,7 @@ export const WorkspaceMembersSurface = ({
                           className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10"
                           onClick={() => void handleRemoveMember(member.userId)}
                           disabled={
-                            isSaving ||
+                            isBusy ||
                             (!isOwner && roleHierarchy[member.role] <= roleHierarchy[currentUserRole])
                           }
                         >
@@ -376,11 +368,11 @@ export const WorkspaceMembersSurface = ({
                     <Button asChild variant="outline" size="sm">
                       <a href={getInviteHref(invitation.acceptToken ?? invitation.id)}>Open invite</a>
                     </Button>
-                    <Button type="button" variant="outline" size="sm" disabled={isSaving} onClick={() => void handleResendInvitation(invitation.id)}>
-                      Resend
+                    <Button type="button" variant="outline" size="sm" disabled={isBusy} onClick={() => void handleResendInvitation(invitation.id)}>
+                      {busyAction === `resend:${invitation.id}` ? "Resending..." : "Resend"}
                     </Button>
-                    <Button type="button" variant="ghost" size="sm" disabled={isSaving} onClick={() => void handleRevokeInvitation(invitation.id)}>
-                      Cancel
+                    <Button type="button" variant="ghost" size="sm" disabled={isBusy} onClick={() => void handleRevokeInvitation(invitation.id)}>
+                      {busyAction === `revoke:${invitation.id}` ? "Canceling..." : "Cancel"}
                     </Button>
                   </div>
                 </div>
@@ -424,24 +416,6 @@ export const WorkspaceMembersSurface = ({
         </CardContent>
       </Card>
 
-      {statusMessage ? (
-        <div className="lg:col-span-3">
-          <Card className="bg-card/85">
-            <CardContent className="pt-6">
-              <PageState
-                eyebrow="Invite sent"
-                title="Invitation saved"
-                body={statusMessage}
-                actions={
-                  <a href="#invite-form" style={pageStateLinkStyle}>
-                    Invite another teammate
-                  </a>
-                }
-              />
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
     </div>
   );
 };
