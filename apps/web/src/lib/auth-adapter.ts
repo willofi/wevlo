@@ -2,11 +2,21 @@ import type { Adapter, AdapterUser, AdapterAccount } from "next-auth/adapters";
 import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
 import type { UserDto, VerificationTokenDto } from "@wevlo/contracts";
 
+const apiV1Path = "/api/v1";
+
+const buildInternalApiUrl = (path: string): string => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseUrl = getWebApiBaseUrl();
+  const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const rootBase = base.endsWith(apiV1Path) ? base.slice(0, -apiV1Path.length) : base;
+
+  return `${rootBase}${normalizedPath}`;
+};
+
 async function internalApiFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
-  const apiBaseUrl = getWebApiBaseUrl();
   const internalToken = getInternalAuthToken();
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(buildInternalApiUrl(path), {
     ...init,
     cache: "no-store",
     headers: {

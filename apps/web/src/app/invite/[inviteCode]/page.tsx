@@ -20,12 +20,26 @@ type InvitePageProps = {
   }>;
 };
 
+const apiV1Path = "/api/v1";
+
+const buildApiV1Url = (path: string): string => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseUrl = getWebApiBaseUrl();
+  const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+
+  if (base.endsWith(apiV1Path)) {
+    return `${base}${normalizedPath}`;
+  }
+
+  return `${base}${apiV1Path}${normalizedPath}`;
+};
+
 export default async function AcceptInvitePage({ params }: InvitePageProps) {
   const { inviteCode } = await params;
   const session = await getCurrentAuthSession();
   const invitePath = sanitizeReturnPath(`/invite/${inviteCode}`);
   const invitationResponse = await fetch(
-    `${getWebApiBaseUrl()}/api/v1/workspace-invitations/${encodeURIComponent(inviteCode)}`,
+    buildApiV1Url(`/workspace-invitations/${encodeURIComponent(inviteCode)}`),
     { cache: "no-store" }
   );
   const invitation = invitationResponse.ok

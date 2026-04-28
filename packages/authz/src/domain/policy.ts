@@ -17,7 +17,7 @@ const workspaceGrants: Record<WorkspaceRole, WorkspaceAction[]> = {
   Owner: ["workspace.view", "workspace.invite", "workspace.manage"],
   Maintainer: ["workspace.view", "workspace.invite", "workspace.manage"],
   Developer: ["workspace.view"],
-  Member: ["workspace.view"],
+  Member: ["workspace.view", "workspace.invite"],
   Guest: ["workspace.view"]
 };
 

@@ -14,6 +14,18 @@ type BffRouteContext = {
 
 const apiBaseUrl = getWebApiBaseUrl();
 const internalToken = getInternalAuthToken();
+const apiV1Path = "/api/v1";
+
+const buildApiV1Url = (path: string): string => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const base = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+
+  if (base.endsWith(apiV1Path)) {
+    return `${base}${normalizedPath}`;
+  }
+
+  return `${base}${apiV1Path}${normalizedPath}`;
+};
 
 const isBodyAllowed = (method: string): boolean => {
   return method !== "GET" && method !== "HEAD";
@@ -47,7 +59,7 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[]): Promi
 
   const body = isBodyAllowed(request.method) ? await request.arrayBuffer() : null;
   const path = pathSegments.join("/");
-  const upstreamUrl = `${apiBaseUrl}/api/v1/${path}`;
+  const upstreamUrl = buildApiV1Url(path);
   
   const upstream = await fetch(`${upstreamUrl}${request.nextUrl.search}`, {
     ...(body ? { body } : {}),
