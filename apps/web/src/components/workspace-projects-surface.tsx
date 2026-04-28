@@ -66,34 +66,35 @@ export function WorkspaceProjectsSurface({
             action={<Button onClick={() => setIsCreateOpen(true)}>Create project</Button>}
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50">
-            <div className="grid grid-cols-[120px_minmax(0,1.4fr)_120px_120px] gap-4 border-b border-border/80 px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <div>Key</div>
-              <div>Project</div>
-              <div>Role</div>
-              <div className="text-right">Visibility</div>
-            </div>
-            <div className="grid">
-              {projects.map((project) => (
-                <Link
-                  key={project.id}
-                  href={getProjectHref(workspace.slug, project.key)}
-                  className="grid grid-cols-[120px_minmax(0,1.4fr)_120px_120px] gap-4 border-b border-border/80 px-5 py-4 transition-colors last:border-b-0 hover:bg-secondary/35"
-                >
-                  <div className="font-mono text-sm text-muted-foreground">{project.key}</div>
+          <div className="grid gap-3">
+            {projects.map((project) => (
+              <Link
+                key={project.id}
+                href={getProjectHref(workspace.slug, project.key)}
+                className="group relative flex items-center justify-between overflow-hidden rounded-xl border border-border/60 bg-card/40 p-5 transition-all hover:border-border hover:bg-secondary/20 hover:shadow-sm"
+              >
+                <div className="flex items-center gap-5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border/60 bg-background font-mono text-sm font-bold text-muted-foreground group-hover:border-primary/20 group-hover:text-primary transition-colors">
+                    {project.key}
+                  </div>
                   <div>
-                    <div className="text-sm font-medium text-foreground">{project.name}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">Open list and board views</div>
+                    <div className="text-base font-semibold text-foreground group-hover:text-primary transition-colors">{project.name}</div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Badge variant="secondary" className="px-1.5 py-0 text-[10px] uppercase tracking-wider font-semibold bg-background/50 border-border/40">
+                        {project.currentUserRole}
+                      </Badge>
+                      <span className="text-[11px] text-muted-foreground/60">•</span>
+                      <span className="text-xs text-muted-foreground">{project.visibility === "private" ? "Private" : "Public"} Project</span>
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">{project.currentUserRole}</div>
-                  <div className="flex justify-end">
-                    <Badge variant="outline" className="rounded-full border-border/80 bg-background/70">
-                      {project.visibility}
-                    </Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" size="sm" className="group-hover:bg-primary/10 group-hover:text-primary">
+                    Open
+                  </Button>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </PrototypeShell>

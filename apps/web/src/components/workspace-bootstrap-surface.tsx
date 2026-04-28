@@ -53,30 +53,35 @@ export function WorkspaceBootstrapSurface({
             action={<Button onClick={() => setIsCreateOpen(true)}>Create workspace</Button>}
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50">
-            <div className="grid grid-cols-[minmax(0,1.6fr)_180px_120px] gap-4 border-b border-border/80 px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              <div>Workspace</div>
-              <div>Slug</div>
-              <div className="text-right">Created</div>
-            </div>
-            <div className="grid">
-              {workspaces.map((workspace) => (
-                <Link
-                  key={workspace.id}
-                  href={getWorkspaceHref(workspace.slug)}
-                  className="grid grid-cols-[minmax(0,1.6fr)_180px_120px] gap-4 border-b border-border/80 px-5 py-4 transition-colors last:border-b-0 hover:bg-secondary/35"
-                >
+          <div className="grid gap-3">
+            {workspaces.map((workspace) => (
+              <Link
+                key={workspace.id}
+                href={getWorkspaceHref(workspace.slug)}
+                className="group relative flex items-center justify-between overflow-hidden rounded-xl border border-border/60 bg-card/40 p-5 transition-all hover:border-border hover:bg-secondary/20 hover:shadow-sm"
+              >
+                <div className="flex items-center gap-5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border/60 bg-background font-bold text-muted-foreground group-hover:border-primary/20 group-hover:text-primary transition-colors">
+                    {workspace.name.slice(0, 1).toUpperCase()}
+                  </div>
                   <div>
-                    <div className="text-sm font-medium text-foreground">{workspace.name}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">Open workspace and project list</div>
+                    <div className="text-base font-semibold text-foreground group-hover:text-primary transition-colors">{workspace.name}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{workspace.slug}</div>
                   </div>
-                  <div className="font-mono text-sm text-muted-foreground">{workspace.slug}</div>
-                  <div className="text-right text-sm text-muted-foreground">
-                    {new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(new Date(workspace.createdAt))}
+                </div>
+                <div className="flex items-center gap-8">
+                  <div className="hidden sm:block text-right">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Created at</div>
+                    <div className="mt-0.5 text-sm text-muted-foreground">
+                      {new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(new Date(workspace.createdAt))}
+                    </div>
                   </div>
-                </Link>
-              ))}
-            </div>
+                  <Button variant="ghost" size="sm" className="group-hover:bg-primary/10 group-hover:text-primary">
+                    Open
+                  </Button>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </PrototypeShell>

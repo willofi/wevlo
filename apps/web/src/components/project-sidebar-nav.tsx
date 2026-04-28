@@ -95,7 +95,6 @@ export function ProjectSidebarNav({
             href={getProjectHref(workspace.slug, candidate.key, mode === "board" ? "board" : mode === "triage" ? "triage" : undefined)}
             label={`${candidate.key} · ${candidate.name}`}
             active={candidate.key === project.key}
-            meta={candidate.currentUserRole}
           />
         ))}
       </SidebarGroup>
