@@ -14,13 +14,16 @@ import { PageState, pageStateButtonStyle, pageStateLinkStyle } from "@/component
 import {
   createWorkspaceInvitation,
   getInviteHref,
-  getWorkspaceMemberHref
+  getWorkspaceMemberHref,
+  removeWorkspaceMember,
+  updateWorkspaceMember
 } from "@/lib/issue-hub-data";
 
 type WorkspaceMembersSurfaceProps = {
   initialInvitations: WorkspaceInvitationDto[];
   initialMembers: WorkspaceMemberDto[];
   workspace: WorkspaceDto;
+  currentUser: { id: string };
 };
 
 const selectClassName =
@@ -29,7 +32,8 @@ const selectClassName =
 export const WorkspaceMembersSurface = ({
   initialInvitations,
   initialMembers,
-  workspace
+  workspace,
+  currentUser
 }: WorkspaceMembersSurfaceProps) => {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<WorkspaceInvitationDto["role"]>("Member");
@@ -37,7 +41,14 @@ export const WorkspaceMembersSurface = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [invitations, setInvitations] = useState(initialInvitations);
-  const [members] = useState(initialMembers);
+  const [members, setMembers] = useState(initialMembers);
+
+  const currentUserMembership = useMemo(
+    () => members.find((m) => m.userId === currentUser.id),
+    [members, currentUser.id]
+  );
+
+  const isOwner = currentUserMembership?.role === "Owner";
 
   const pendingInvitations = useMemo(
     () => invitations.filter((invitation) => invitation.status === "pending"),
@@ -69,37 +80,69 @@ export const WorkspaceMembersSurface = ({
     }
   };
 
+  const handleUpdateRole = async (userId: string, newRole: "Owner" | "Member") => {
+    try {
+      setIsSaving(true);
+      setError(null);
+      const updatedMember = await updateWorkspaceMember(workspace.slug, userId, { role: newRole });
+      setMembers((current) => current.map((m) => (m.userId === userId ? updatedMember : m)));
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Role update failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!confirm("Are you sure you want to remove this member from the workspace?")) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setError(null);
+      await removeWorkspaceMember(workspace.slug, userId);
+      setMembers((current) => current.filter((m) => m.userId !== userId));
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "Member removal failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      <Card id="invite-form" className="bg-card/85">
-        <CardHeader>
-          <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Invite teammate</div>
-          <CardTitle>Workspace roster</CardTitle>
-          <CardDescription>
-            Invite collaborators into {workspace.name} before granting project-specific access.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <Input
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="name@company.com"
-            type="email"
-          />
-          <select value={role} onChange={(event) => setRole(event.target.value as "Owner" | "Member")} className={selectClassName}>
-            <option value="Member">Member</option>
-            <option value="Owner">Owner</option>
-          </select>
-          <Button type="button" onClick={handleInvite} disabled={isSaving || email.length === 0}>
-            {isSaving ? "Sending invite..." : "Send invitation"}
-          </Button>
-          {error ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
-          ) : null}
-        </CardContent>
-      </Card>
+      {isOwner && (
+        <Card id="invite-form" className="bg-card/85">
+          <CardHeader>
+            <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Invite teammate</div>
+            <CardTitle>Workspace roster</CardTitle>
+            <CardDescription>
+              Invite collaborators into {workspace.name} before granting project-specific access.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <Input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@company.com"
+              type="email"
+            />
+            <select value={role} onChange={(event) => setRole(event.target.value as "Owner" | "Member")} className={selectClassName}>
+              <option value="Member">Member</option>
+              <option value="Owner">Owner</option>
+            </select>
+            <Button type="button" onClick={handleInvite} disabled={isSaving || email.length === 0}>
+              {isSaving ? "Sending invite..." : "Send invitation"}
+            </Button>
+            {error ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
 
-      <Card className="bg-card/85">
+      <Card className={cn("bg-card/85", !isOwner && "lg:col-span-2")}>
         <CardHeader>
           <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Workspace members</div>
           <CardTitle>{members.length} active member{members.length === 1 ? "" : "s"}</CardTitle>
@@ -111,26 +154,53 @@ export const WorkspaceMembersSurface = ({
               title="Invite the first teammate"
               body="This workspace is empty for now. Send an invite so the team can start collaborating."
               actions={
-                <a href="#invite-form" style={pageStateButtonStyle}>
-                  Invite someone
-                </a>
+                isOwner ? (
+                  <a href="#invite-form" style={pageStateButtonStyle}>
+                    Invite someone
+                  </a>
+                ) : undefined
               }
             />
           ) : (
             <div className="grid gap-3">
               {members.map((member) => (
-                <div key={member.userId} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/70 px-4 py-3">
+                <div key={member.userId} className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <Link
                       href={getWorkspaceMemberHref(workspace.slug, member.userId)}
-                      className="text-sm font-semibold text-foreground hover:text-primary"
+                      className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
                     >
                       {member.user.name}
                     </Link>
-                    <div className="mt-1 text-sm text-muted-foreground">{member.user.email ?? member.userId}</div>
+                    <div className="mt-1 text-xs text-muted-foreground truncate">{member.user.email ?? member.userId}</div>
                   </div>
-                  <div className="shrink-0 rounded-full border border-border/70 bg-secondary/40 px-3 py-1 text-xs font-semibold text-foreground">
-                    {member.role}
+                  <div className="flex items-center gap-2">
+                    {isOwner && member.userId !== currentUser.id ? (
+                      <>
+                        <select
+                          value={member.role}
+                          onChange={(e) => void handleUpdateRole(member.userId, e.target.value as "Owner" | "Member")}
+                          className={cn(selectClassName, "h-8 w-28 text-xs py-0")}
+                          disabled={isSaving}
+                        >
+                          <option value="Member">Member</option>
+                          <option value="Owner">Owner</option>
+                        </select>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10"
+                          onClick={() => void handleRemoveMember(member.userId)}
+                          disabled={isSaving}
+                        >
+                          Remove
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="shrink-0 rounded-full border border-border/70 bg-secondary/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground">
+                        {member.role}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

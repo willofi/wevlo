@@ -881,6 +881,34 @@ export const createWorkspaceInvitation = async (
   return invitation;
 };
 
+export const updateWorkspaceMember = async (
+  workspaceSlug: string,
+  userId: string,
+  payload: {
+    role: "Owner" | "Member";
+  }
+): Promise<WorkspaceMemberDto> => {
+  const member = await requestJson<WorkspaceMemberDto>(`/workspaces/${workspaceSlug}/members/${encodeURIComponent(userId)}`, {
+    body: JSON.stringify(payload),
+    method: "PUT"
+  });
+
+  if (!member) {
+    throw new Error("Workspace member update returned no payload");
+  }
+
+  return member;
+};
+
+export const removeWorkspaceMember = async (
+  workspaceSlug: string,
+  userId: string
+): Promise<void> => {
+  await requestJson(`/workspaces/${workspaceSlug}/members/${encodeURIComponent(userId)}`, {
+    method: "DELETE"
+  });
+};
+
 export const getWorkspaceInvitationByToken = async (
   inviteToken: string
 ): Promise<WorkspaceInvitationDto | undefined> => {

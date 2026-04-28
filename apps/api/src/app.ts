@@ -54,7 +54,9 @@ import {
   listVisibleWorkspacesUseCase,
   PostgresIdentityRepository,
   PostgresWorkspaceRepository,
+  removeWorkspaceMemberUseCase,
   resolveCurrentUserUseCase,
+  updateWorkspaceMemberUseCase,
   UserHandleTakenError,
   WorkspaceSlugGenerationFailedError,
   WorkspaceSlugTakenError
@@ -2437,6 +2439,56 @@ export const buildApi = ({ database }: ApiDependencies) => {
     });
 
     return reply.status(201).send(invitation);
+  });
+
+  app.put("/workspaces/:workspaceSlug/members/:userId", async (request, reply) => {
+    const params = request.params as { userId: string; workspaceSlug: string };
+    const payload = z.object({ role: z.enum(["Owner", "Member"]) }).parse(request.body);
+    const currentUser = await resolveCurrentUser(request);
+    const { membership, workspace } = await resolveWorkspaceAccess(currentUser.id, params.workspaceSlug);
+
+    if (!workspace) {
+      return sendError(reply, 404, "workspace.not_found", "Workspace not found");
+    }
+
+    if (requireWorkspaceAction(reply, membership, "workspace.manage", "Workspace management denied")) {
+      return;
+    }
+
+    await updateWorkspaceMemberUseCase(identityRepository, {
+      role: payload.role,
+      userId: params.userId,
+      workspaceId: workspace.id
+    });
+
+    const members = await listWorkspaceMembersUseCase(identityRepository, workspace.id);
+    const updatedMember = members.find((m) => m.userId === params.userId);
+    return reply.send(updatedMember);
+  });
+
+  app.delete("/workspaces/:workspaceSlug/members/:userId", async (request, reply) => {
+    const params = request.params as { userId: string; workspaceSlug: string };
+    const currentUser = await resolveCurrentUser(request);
+    const { membership, workspace } = await resolveWorkspaceAccess(currentUser.id, params.workspaceSlug);
+
+    if (!workspace) {
+      return sendError(reply, 404, "workspace.not_found", "Workspace not found");
+    }
+
+    if (requireWorkspaceAction(reply, membership, "workspace.manage", "Workspace management denied")) {
+      return;
+    }
+
+    if (params.userId === currentUser.id) {
+      return sendError(reply, 400, "workspace.cannot_remove_self", "You cannot remove yourself from the workspace");
+    }
+
+    await removeWorkspaceMemberUseCase(identityRepository, {
+      userId: params.userId,
+      workspaceId: workspace.id
+    });
+
+    return reply.status(204).send();
   });
 
   app.get("/workspace-invitations/:acceptToken", async (request, reply) => {

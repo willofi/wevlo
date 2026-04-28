@@ -20,7 +20,7 @@ type MembersPageProps = {
 
 export default async function MembersPage({ params }: MembersPageProps) {
   const { workspaceSlug } = await params;
-  await requireCurrentAuthSession(`/${workspaceSlug}/members`);
+  const session = await requireCurrentAuthSession(`/${workspaceSlug}/members`);
   let workspace;
 
   try {
@@ -61,6 +61,7 @@ export default async function MembersPage({ params }: MembersPageProps) {
   return (
     <WorkspaceAdminShell active="members" projects={projects} workspace={workspace}>
       <WorkspaceMembersSurface
+        currentUser={{ id: session.userId }}
         initialInvitations={invitations}
         initialMembers={members}
         workspace={workspace}

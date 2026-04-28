@@ -558,6 +558,23 @@ export class PostgresIdentityRepository {
       .execute();
   }
 
+  async updateMember(workspaceId: string, userId: string, role: "Owner" | "Member"): Promise<void> {
+    await this.database
+      .updateTable("workspace_memberships")
+      .set({ role })
+      .where("workspace_id", "=", workspaceId)
+      .where("user_id", "=", userId)
+      .execute();
+  }
+
+  async removeMember(workspaceId: string, userId: string): Promise<void> {
+    await this.database
+      .deleteFrom("workspace_memberships")
+      .where("workspace_id", "=", workspaceId)
+      .where("user_id", "=", userId)
+      .execute();
+  }
+
   async updateProfile(input: {
     handle?: string;
     name?: string;

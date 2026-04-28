@@ -6,6 +6,7 @@ export * from "./application/list-workspace-invitations";
 export * from "./application/list-workspace-members";
 export * from "./application/list-workspaces";
 export * from "./application/remove-workspace-member";
+export * from "./application/update-workspace-member";
 export * from "./application/revoke-workspace-invitation";
 export * from "./application/resolve-current-user";
 export * from "./domain/workspace";
