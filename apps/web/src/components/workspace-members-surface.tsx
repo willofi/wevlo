@@ -68,7 +68,7 @@ export const WorkspaceMembersSurface = ({
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [invitations, setInvitations] = useState(initialInvitations);
+  const [invitations] = useState(initialInvitations);
   const [members, setMembers] = useState(initialMembers);
 
   const currentUserMembership = useMemo(

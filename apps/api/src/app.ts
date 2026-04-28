@@ -45,6 +45,7 @@ import {
   createVerificationTokenRequestSchema,
   verifyTokenRequestSchema,
   createUserRequestSchema,
+  linkAccountRequestSchema,
   type WorkspaceRole,
   type ProjectRole,
   type WorkspaceInvitationResult
@@ -3455,6 +3456,13 @@ export const buildApi = ({ database }: ApiDependencies) => {
     return user ? reply.send(user) : reply.status(404).send();
   });
 
+  app.get("/internal/auth/users/by-identity/:provider/:providerUserId", async (request, reply) => {
+    validateInternalAuth(request);
+    const params = request.params as { provider: string; providerUserId: string };
+    const user = await identityRepository.findUserByIdentity(params.provider as any, params.providerUserId);
+    return user ? reply.send(user) : reply.status(404).send();
+  });
+
   app.get("/internal/auth/users/:id", async (request, reply) => {
     validateInternalAuth(request);
     const params = request.params as { id: string };
@@ -3490,6 +3498,20 @@ export const buildApi = ({ database }: ApiDependencies) => {
     });
     
     return reply.status(201).send(user);
+  });
+
+  app.post("/internal/auth/users/link", async (request, reply) => {
+    validateInternalAuth(request);
+    const payload = linkAccountRequestSchema.parse(request.body);
+
+    const user = await identityRepository.upsertIdentityForUser({
+      email: payload.email ?? null,
+      provider: payload.provider as any,
+      providerUserId: payload.providerUserId,
+      userId: payload.userId
+    });
+
+    return reply.send(user);
   });
 
   app.post("/internal/auth/verification-tokens", async (request, reply) => {

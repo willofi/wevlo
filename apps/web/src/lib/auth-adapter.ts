@@ -2,10 +2,10 @@ import type { Adapter, AdapterUser, AdapterAccount } from "next-auth/adapters";
 import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
 import type { UserDto, VerificationTokenDto } from "@wevlo/contracts";
 
-const apiBaseUrl = getWebApiBaseUrl();
-const internalToken = getInternalAuthToken();
-
 async function internalApiFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const apiBaseUrl = getWebApiBaseUrl();
+  const internalToken = getInternalAuthToken();
+
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     cache: "no-store",
@@ -75,10 +75,10 @@ export function WevloAuthAdapter(): Adapter {
     },
 
     async getUserByAccount({ provider, providerAccountId }: Pick<AdapterAccount, "provider" | "providerAccountId">) {
-      if (provider === "email") {
-        return this.getUserByEmail!(providerAccountId);
-      }
-      return null;
+      const user = await internalApiFetch<UserDto>(
+        `/internal/auth/users/by-identity/${encodeURIComponent(provider)}/${encodeURIComponent(providerAccountId)}`
+      );
+      return user ? mapToAdapterUser(user) : null;
     },
 
     async updateUser(user: Partial<AdapterUser> & { id: string }) {
@@ -89,8 +89,16 @@ export function WevloAuthAdapter(): Adapter {
       return;
     },
 
-    async linkAccount(_account: AdapterAccount) {
-      return;
+    async linkAccount(account: AdapterAccount) {
+      await internalApiFetch("/internal/auth/users/link", {
+        method: "POST",
+        body: JSON.stringify({
+          email: account.email ?? undefined,
+          provider: account.provider,
+          providerUserId: account.providerAccountId,
+          userId: account.userId
+        })
+      });
     },
 
     async unlinkAccount(_account: Pick<AdapterAccount, "provider" | "providerAccountId">) {
