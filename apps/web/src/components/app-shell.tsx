@@ -142,19 +142,6 @@ export function AppShell({
         />
         <PersonalNav />
         {sidebar ? <div className="space-y-5">{sidebar}</div> : null}
-
-        {currentWorkspaceSlug && (
-          <div className="mt-auto pt-4 border-t border-sidebar-foreground/10">
-            <button
-              type="button"
-              onClick={() => setIsInviteDialogOpen(true)}
-              className="inline-flex h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-foreground group"
-            >
-              <UserPlus className="size-3.5 transition-colors group-hover:text-primary" />
-              Invite people
-            </button>
-          </div>
-        )}
       </>
     ),
     [currentWorkspaceSlug, homePanel, sidebar, workspaces]
@@ -221,7 +208,17 @@ export function AppShell({
                 </div>
               )}
             </div>
-            <div className="shrink-0 pt-2">
+            <div className="shrink-0 pt-2 space-y-2">
+              {currentWorkspaceSlug && !preferences.sidebarCollapsed && (
+                <button
+                  type="button"
+                  onClick={() => setIsInviteDialogOpen(true)}
+                  className="inline-flex h-9 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[13px] font-medium text-muted-foreground transition-all hover:bg-sidebar-foreground/5 hover:text-foreground group mb-2"
+                >
+                  <UserPlus className="size-3.5 transition-colors group-hover:text-primary" />
+                  Invite people
+                </button>
+              )}
               {sidebarFooterContent}
             </div>
           </div>
