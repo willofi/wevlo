@@ -68,7 +68,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return genericResponse();
   }
 
-  let email = "";
+  let email: string;
   try {
     const body = (await request.json()) as { email?: string };
     email = normalizeEmail(body.email ?? "");
