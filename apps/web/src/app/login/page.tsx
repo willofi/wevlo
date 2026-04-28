@@ -8,6 +8,12 @@ import { Button, Input, Card, CardContent, CardHeader, CardTitle, CardDescriptio
 import { Logo } from "@/components/landing/logo";
 import { sanitizeReturnPath } from "@wevlo/auth";
 
+const errorMessages: Record<string, string> = {
+  OAuthAccountNotLinked: "이미 가입된 이메일입니다. 동일 이메일 Google 계정 연결 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
+  google_email_not_verified: "Google 계정 이메일 검증이 확인되지 않아 로그인할 수 없어요.",
+  oauth_link_conflict: "동일 이메일 계정 연결 중 충돌이 발생했어요. 기존 로그인 방식으로 먼저 로그인해 주세요."
+};
+
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [emailEnabled, setEmailEnabled] = React.useState(false);
@@ -25,10 +31,20 @@ export default function LoginPage() {
 
   React.useEffect(() => {
     void getProviders().then((providers) => {
-      setEmailEnabled(Boolean(providers?.email));
+      setEmailEnabled(Boolean(providers?.["email-otp"]));
       setDemoEnabled(Boolean(providers?.credentials));
     });
   }, []);
+
+  React.useEffect(() => {
+    const error = searchParams.get("error");
+    if (!error) {
+      return;
+    }
+
+    const message = errorMessages[error] ?? "로그인 중 문제가 발생했어요. 다시 시도해 주세요.";
+    setFormMessage(message);
+  }, [searchParams]);
 
   const handleEmailLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,14 +57,15 @@ export default function LoginPage() {
           setFormMessage("이메일을 입력해 주세요.");
           return;
         }
-        await signIn("email", { email: normalizedEmail, callbackUrl });
+
         await fetch("/api/auth/email-otp/request", {
           body: JSON.stringify({ email: normalizedEmail }),
           headers: { "content-type": "application/json" },
           method: "POST"
         });
+
         setOtpVisible(true);
-        setFormMessage("입력한 이메일로 인증 안내를 보냈어요. 메일함을 확인해 주세요.");
+        setFormMessage("코드를 발송했어요. 이메일에서 6자리 코드를 확인해 입력해 주세요.");
       } finally {
         setIsSubmitting(false);
       }
@@ -76,7 +93,7 @@ export default function LoginPage() {
         });
 
         if (!result || result.error) {
-          setFormMessage("인증 코드를 확인해 주세요.");
+          setFormMessage("코드가 만료되었거나 잘못되었습니다. 다시 발송해 주세요.");
           return;
         }
 
@@ -94,7 +111,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(40%_40%_at_50%_50%,rgba(255,255,255,0.02)_0%,transparent_100%)]" />
-      
+
       <Card className="w-full max-w-md border-border/40 bg-card/50 backdrop-blur-xl shadow-2xl">
         <CardHeader className="flex flex-col items-center space-y-4 pb-8">
           <Logo size={40} className="mb-2" />
@@ -104,8 +121,8 @@ export default function LoginPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full h-12 rounded-xl border-border/60 bg-background/50 hover:bg-secondary/80 transition-all flex items-center justify-center gap-3"
             onClick={() => void signIn("google", { callbackUrl })}
           >
@@ -183,15 +200,15 @@ export default function LoginPage() {
 
           {demoEnabled ? (
             <div className="pt-4 space-y-3">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">Demo Access</div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("user_demo_owner")}>
-                Project Lead
-              </Button>
-              <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("user-ava")}>
-                Developer
-              </Button>
-            </div>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">Demo Access</div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("user_demo_owner")}>
+                  Project Lead
+                </Button>
+                <Button variant="secondary" size="sm" className="rounded-lg h-10" onClick={() => handleDemoLogin("user-ava")}>
+                  Developer
+                </Button>
+              </div>
             </div>
           ) : null}
         </CardContent>

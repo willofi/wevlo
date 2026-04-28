@@ -1,8 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import EmailProvider from "next-auth/providers/email";
-import { Resend } from "resend";
 
 import type { WorkspaceRole } from "@wevlo/contracts";
 import { getDemoUser, sanitizeReturnPath } from "@wevlo/auth";
@@ -24,43 +22,11 @@ const devAuthEnabled = isDevAuthEnabled();
 const emailAuthConfigured = isEmailAuthConfigured();
 
 const providers: NextAuthOptions["providers"] = [];
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
-if (emailAuthConfigured) {
-  providers.push(
-    EmailProvider({
-      from: process.env.EMAIL_FROM ?? "noreply@wevlo.io",
-      // This is unused because delivery is handled by Resend directly.
-      server: "smtp://localhost:1025",
-      async sendVerificationRequest({ identifier, provider, url }) {
-        if (!resend) {
-          throw new Error("RESEND_API_KEY is not configured");
-        }
-
-        const response = await resend.emails.send({
-          from: provider.from as string,
-          html: `
-            <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-              <p>Sign in to Wevlo by clicking the link below.</p>
-              <p><a href="${url}">Continue to Wevlo</a></p>
-              <p style="font-size: 12px; color: #6b7280;">If you did not request this email, you can ignore it.</p>
-            </div>
-          `,
-          subject: "Sign in to Wevlo",
-          to: identifier
-        });
-
-        if (response.error) {
-          throw new Error(response.error.message);
-        }
-      }
-    })
-  );
-}
 
 if (isGoogleOAuthConfigured()) {
   providers.push(
     Google({
+      allowDangerousEmailAccountLinking: true,
       clientId: process.env.AUTH_GOOGLE_ID!,
       clientSecret: process.env.AUTH_GOOGLE_SECRET!
     })
@@ -164,6 +130,29 @@ if (devAuthEnabled) {
 export const authOptions: NextAuthOptions = {
   adapter: WevloAuthAdapter(),
   callbacks: {
+    async signIn({ account, profile, user }) {
+      if (account?.provider !== "google") {
+        return true;
+      }
+
+      const providerEmail = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+      const emailVerified = Boolean((profile as { email_verified?: boolean } | undefined)?.email_verified);
+
+      if (!providerEmail || !emailVerified) {
+        return "/login?error=google_email_not_verified";
+      }
+
+      const existing = await getInternalAuthUserByEmail(providerEmail);
+      if (!existing) {
+        return true;
+      }
+
+      if (existing.id !== user.id) {
+        return "/login?error=oauth_link_conflict";
+      }
+
+      return true;
+    },
     async jwt({ account, token, user }) {
       if (account && user) {
         const providerAvatarUrl =
@@ -262,8 +251,8 @@ export const authOptions: NextAuthOptions = {
       name: "wevlo.next-auth.session-token",
       options: {
         httpOnly: true,
-        path: "/",
         sameSite: "lax",
+        path: "/",
         secure: process.env.NODE_ENV === "production"
       }
     }
