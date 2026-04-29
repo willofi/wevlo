@@ -1,7 +1,10 @@
 import { config as loadDotenv } from "dotenv";
 
 const start = async () => {
-  loadDotenv({ path: ".env.local" });
+  if (process.env.NODE_ENV !== "production") {
+    loadDotenv({ path: process.env.WEVLO_ENV_FILE ?? ".env.local" });
+  }
+
   const { createDatabase, destroyDatabase, validateApiRuntimeEnv } = await import("@wevlo/data-access");
   const { buildApi } = await import("./app.js");
 

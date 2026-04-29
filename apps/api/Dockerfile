@@ -7,7 +7,7 @@ RUN corepack enable
 FROM base AS build
 WORKDIR /app
 
-# 의존성 설치에 필요한 파일들만 먼저 복사
+# Install dependencies with a stable cache key first.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/audit-activity/package.json ./packages/audit-activity/
@@ -27,20 +27,21 @@ COPY packages/ui-core/package.json ./packages/ui-core/
 
 RUN pnpm install --frozen-lockfile
 
-# 모든 소스 코드 복사 (tsx 실행을 위해 필요)
+# Copy the full repo only after dependencies are installed.
 COPY . .
 
-# 배포용 패키지 추출 (내부 의존성 포함)
+# Build the API and its workspace dependencies before pruning.
+RUN pnpm turbo run build --filter=@wevlo/api...
+
+# Extract a production-only runtime tree.
 RUN pnpm --filter @wevlo/api --prod deploy /app/pruned
 
 FROM base AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# 추출된 파일 복사
 COPY --from=build /app/pruned .
 
 EXPOSE 4000
 
-# tsx를 사용하여 소스를 직접 실행 (모듈 해석 문제 완벽 해결)
-CMD ["pnpm", "start"]
+CMD ["node", "dist/main.js"]

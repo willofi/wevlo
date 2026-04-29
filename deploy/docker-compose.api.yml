@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/${GHCR_REPOSITORY}/api:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REF}
     container_name: wevlo-api
     restart: unless-stopped
     env_file:

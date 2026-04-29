@@ -26,6 +26,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_ref: ${{ steps.publish-image.outputs.image_ref }}
+      image_tag: ${{ steps.publish-image.outputs.image_tag }}
+      image_digest: ${{ steps.build-image.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +44,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build API workspace
+        run: pnpm turbo run build --filter=@wevlo/api...
 
       - name: Run DB migrations (idempotency check)
         env:
@@ -58,7 +65,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - id: build-image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/api/Dockerfile
@@ -66,6 +74,12 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}/api:latest
             ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+
+      - id: publish-image
+        name: Publish image metadata
+        run: |
+          echo "image_tag=ghcr.io/${{ github.repository }}/api:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=ghcr.io/${{ github.repository }}/api@${{ steps.build-image.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   deploy:
     needs: build
@@ -79,8 +93,7 @@ jobs:
 
       - name: Deploy on Mac mini
         env:
-          GH_SHA: ${{ github.sha }}
-          GH_REPO: ${{ github.repository }}
+          IMAGE_REF: ${{ needs.build.outputs.image_ref }}
         run: |
           set -eu
           mkdir -p /opt/wevlo/deploy
@@ -100,19 +113,28 @@ jobs:
 
           cd /opt/wevlo/deploy
 
-          if grep -q '^IMAGE_TAG=' .env.production; then
-            sed -i.bak "s/^IMAGE_TAG=.*/IMAGE_TAG=${GH_SHA}/" .env.production
-          else
-            echo "IMAGE_TAG=${GH_SHA}" >> .env.production
-          fi
+          printf 'IMAGE_REF=%s\n' "${IMAGE_REF}" > .env.deploy
 
-          if grep -q '^GHCR_REPOSITORY=' .env.production; then
-            sed -i.bak "s#^GHCR_REPOSITORY=.*#GHCR_REPOSITORY=${GH_REPO}#" .env.production
-          else
-            echo "GHCR_REPOSITORY=${GH_REPO}" >> .env.production
-          fi
+          docker compose --env-file .env.deploy -f docker-compose.api.yml config >/dev/null
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker compose --env-file .env.production -f docker-compose.api.yml pull api
-          docker compose --env-file .env.production -f docker-compose.api.yml up -d api
+          docker compose --env-file .env.deploy -f docker-compose.api.yml pull api
+          docker compose --env-file .env.deploy -f docker-compose.api.yml up -d api
+          docker compose --env-file .env.deploy -f docker-compose.api.yml ps api
+
+          healthy=0
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS http://127.0.0.1:4000/health >/dev/null; then
+              healthy=1
+              break
+            fi
+
+            sleep 5
+          done
+
           docker image prune -f
+
+          if [ "${healthy}" -ne 1 ]; then
+            docker compose --env-file .env.deploy -f docker-compose.api.yml logs --tail=100 api
+            exit 1
+          fi

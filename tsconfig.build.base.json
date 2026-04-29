@@ -1,0 +1,59 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": true,
+    "paths": {
+      "@/*": [
+        "apps/web/src/*"
+      ],
+      "@wevlo/audit-activity": [
+        "packages/audit-activity/dist/index.d.ts"
+      ],
+      "@wevlo/auth": [
+        "packages/auth/dist/index.d.ts"
+      ],
+      "@wevlo/authz": [
+        "packages/authz/dist/index.d.ts"
+      ],
+      "@wevlo/contracts": [
+        "packages/contracts/dist/index.d.ts"
+      ],
+      "@wevlo/core": [
+        "packages/core/dist/index.d.ts"
+      ],
+      "@wevlo/data-access": [
+        "packages/data-access/dist/index.d.ts"
+      ],
+      "@wevlo/identity-tenancy": [
+        "packages/identity-tenancy/dist/index.d.ts"
+      ],
+      "@wevlo/integrations": [
+        "packages/integrations/dist/index.d.ts"
+      ],
+      "@wevlo/issues": [
+        "packages/issues/dist/index.d.ts"
+      ],
+      "@wevlo/notifications": [
+        "packages/notifications/dist/index.d.ts"
+      ],
+      "@wevlo/projects": [
+        "packages/projects/dist/index.d.ts"
+      ],
+      "@wevlo/projections-search": [
+        "packages/projections-search/dist/index.d.ts"
+      ],
+      "@wevlo/test-kit": [
+        "packages/test-kit/dist/index.d.ts"
+      ],
+      "@wevlo/ui-core": [
+        "packages/ui-core/dist/index.d.ts"
+      ],
+      "@wevlo/ui-native": [
+        "packages/ui-native/dist/index.d.ts"
+      ],
+      "@wevlo/ui-web": [
+        "packages/ui-web/dist/index.d.ts"
+      ]
+    }
+  }
+}
