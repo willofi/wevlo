@@ -2,6 +2,7 @@
 
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -78,7 +79,6 @@ import {
   getIssueHref,
   getIssueSubscription,
   getProjectBoardConfig,
-  listProjectLabels,
   setIssueReaction,
   setCommentReaction,
   setIssueSubscription,
@@ -89,6 +89,8 @@ import {
   getMe,
   getWorkspaceMemberHref
 } from "@/lib/issue-hub-data";
+import { useProjectLabelsQuery } from "@/lib/query-hooks";
+import { queryKeys } from "@/lib/query-keys";
 import {
   buildProjectStateOptions,
   endOfWeek,
@@ -143,6 +145,7 @@ export function IssueDetailEditor({
   workspaceMembers,
   workspaceSlug
 }: IssueDetailEditorProps) {
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const commentFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -227,7 +230,6 @@ export function IssueDetailEditor({
   const [resolvedCommentIds, setResolvedCommentIds] = useState<Set<string>>(new Set());
   const [resolvedViewerUserId, setResolvedViewerUserId] = useState(viewerUserId);
   const [activityItems, setActivityItems] = useState<IssueActivityItemDto[]>([]);
-  const [projectLabels, setProjectLabels] = useState<IssueLabelDto[]>([]);
   const [boardConfigColumns, setBoardConfigColumns] = useState<ProjectBoardColumnConfigDto[]>([]);
   const [stateSearch, setStateSearch] = useState("");
   const [assigneeSearch, setAssigneeSearch] = useState("");
@@ -237,6 +239,8 @@ export function IssueDetailEditor({
   const [isStatusSettingsOpen, setIsStatusSettingsOpen] = useState(false);
   const [draftBoardConfigColumns, setDraftBoardConfigColumns] = useState<ProjectBoardColumnConfigDto[]>([]);
   const [isSavingBoardConfig, setIsSavingBoardConfig] = useState(false);
+  const projectLabelsQuery = useProjectLabelsQuery(workspaceSlug, projectKey);
+  const projectLabels = projectLabelsQuery.data ?? [];
 
   useEffect(() => {
     if (normalizeContent(issue.description) === normalizeContent(savedContentRef.current.description) &&
@@ -447,13 +451,9 @@ export function IssueDetailEditor({
 
     const loadProjectMetadata = async () => {
       try {
-        const [labels, boardConfig] = await Promise.all([
-          listProjectLabels(workspaceSlug, projectKey),
-          getProjectBoardConfig(workspaceSlug, projectKey)
-        ]);
+        const boardConfig = await getProjectBoardConfig(workspaceSlug, projectKey);
 
         if (!cancelled) {
-          setProjectLabels(labels);
           setBoardConfigColumns(boardConfig.columns);
           setDraftBoardConfigColumns(boardConfig.columns);
         }
@@ -661,10 +661,14 @@ export function IssueDetailEditor({
         name: trimmedName
       });
 
-      setProjectLabels((current) => {
-        const deduped = current.some((label) => label.id === createdLabel.id) ? current : [...current, createdLabel];
-        return [...deduped].sort((left, right) => left.name.localeCompare(right.name));
-      });
+      queryClient.setQueryData<IssueLabelDto[] | undefined>(
+        queryKeys.project.labels(workspaceSlug, projectKey),
+        (current) => {
+          const next = current ?? [];
+          const deduped = next.some((label) => label.id === createdLabel.id) ? next : [...next, createdLabel];
+          return [...deduped].sort((left, right) => left.name.localeCompare(right.name));
+        }
+      );
       
       const nextLabelIds = [...new Set([...issue.labels.map(l => l.id), createdLabel.id])];
       handleLabelChange(nextLabelIds);

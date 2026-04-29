@@ -169,6 +169,26 @@ const shouldDeliverInApp = (
   return preferences.inAppEnabled && preferences.categories[category].inAppEnabled;
 };
 
+const notificationSelectColumns = [
+  "actor_user_id",
+  "archived_at",
+  "body",
+  "category",
+  "created_at",
+  "event_type",
+  "href",
+  "id",
+  "invitation_id",
+  "issue_id",
+  "payload_json",
+  "project_id",
+  "read_at",
+  "recipient_user_id",
+  "seen_at",
+  "title",
+  "workspace_id"
+] as const;
+
 export class PostgresNotificationRepository {
   constructor(private readonly database: DatabaseExecutor) {}
 
@@ -291,7 +311,7 @@ export class PostgresNotificationRepository {
     const [items, unseenCount] = await Promise.all([
       this.database
         .selectFrom("notifications")
-        .selectAll()
+        .select(notificationSelectColumns)
         .where("recipient_user_id", "=", userId)
         .where("archived_at", "is", null)
         .orderBy("created_at", "desc")
@@ -315,7 +335,7 @@ export class PostgresNotificationRepository {
   }): Promise<NotificationListResponseDto> {
     let query = this.database
       .selectFrom("notifications")
-      .selectAll()
+      .select(notificationSelectColumns)
       .where("recipient_user_id", "=", input.userId);
 
     if (input.status === "archived") {

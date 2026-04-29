@@ -1,10 +1,18 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type PropsWithChildren } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createContext, useContext, type PropsWithChildren } from "react";
 
 import type { NotificationSummaryDto } from "@wevlo/contracts";
 
-import { getNotificationSummary, markNotificationsRead, markNotificationsSeen } from "@/lib/issue-hub-data";
+import { markNotificationsRead, markNotificationsSeen } from "@/lib/issue-hub-data";
+import {
+  optimisticMarkNotificationsRead,
+  optimisticMarkNotificationsSeen,
+  restoreNotificationSummary
+} from "@/lib/query-cache-helpers";
+import { useNotificationSummaryQuery } from "@/lib/query-hooks";
+import { queryKeys } from "@/lib/query-keys";
 
 type NotificationSummaryContextValue = {
   isLoading: boolean;
@@ -28,13 +36,44 @@ const NotificationSummaryContext = createContext<NotificationSummaryContextValue
 });
 
 export function NotificationSummaryProvider({ children }: PropsWithChildren) {
-  const [summary, setSummary] = useState<NotificationSummaryDto>(emptySummary);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const summaryQuery = useNotificationSummaryQuery();
+
+  const markSeenMutation = useMutation({
+    mutationFn: markNotificationsSeen,
+    onError: (_error, _ids, context) => {
+      restoreNotificationSummary(queryClient, context?.previous);
+    },
+    onMutate: async (ids: string[]) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.notifications.summary() });
+      return {
+        previous: optimisticMarkNotificationsSeen(queryClient, ids)
+      };
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.summary() });
+    }
+  });
+
+  const markReadMutation = useMutation({
+    mutationFn: markNotificationsRead,
+    onError: (_error, _ids, context) => {
+      restoreNotificationSummary(queryClient, context?.previous);
+    },
+    onMutate: async (ids: string[]) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.notifications.summary() });
+      return {
+        previous: optimisticMarkNotificationsRead(queryClient, ids)
+      };
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.summary() });
+      await queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
+    }
+  });
 
   const refresh = async () => {
-    const next = await getNotificationSummary();
-    setSummary(next);
-    setIsLoading(false);
+    await summaryQuery.refetch();
   };
 
   const markSeen = async (ids: string[]) => {
@@ -42,14 +81,7 @@ export function NotificationSummaryProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    await markNotificationsSeen(ids);
-    setSummary((current) => ({
-      ...current,
-      items: current.items.map((item) =>
-        ids.includes(item.id) ? { ...item, seenAt: item.seenAt ?? new Date().toISOString() } : item
-      ),
-      unseenCount: Math.max(0, current.unseenCount - current.items.filter((item) => item.seenAt === null && ids.includes(item.id)).length)
-    }));
+    await markSeenMutation.mutateAsync(ids);
   };
 
   const markRead = async (ids: string[]) => {
@@ -57,57 +89,11 @@ export function NotificationSummaryProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    await markNotificationsRead(ids);
-    setSummary((current) => ({
-      ...current,
-      items: current.items.map((item) =>
-        ids.includes(item.id)
-          ? {
-              ...item,
-              readAt: item.readAt ?? new Date().toISOString(),
-              seenAt: item.seenAt ?? new Date().toISOString()
-            }
-          : item
-      ),
-      unseenCount: Math.max(0, current.unseenCount - current.items.filter((item) => item.seenAt === null && ids.includes(item.id)).length)
-    }));
+    await markReadMutation.mutateAsync(ids);
   };
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const next = await getNotificationSummary();
-
-        if (!cancelled) {
-          setSummary(next);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void load();
-
-    const interval = window.setInterval(() => {
-      void load();
-    }, 60_000);
-
-    const handleFocus = () => {
-      void load();
-    };
-
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, []);
+  const summary = summaryQuery.data ?? emptySummary;
+  const isLoading = summaryQuery.isLoading;
 
   return (
     <NotificationSummaryContext.Provider

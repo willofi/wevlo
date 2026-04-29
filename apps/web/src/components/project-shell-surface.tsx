@@ -1,11 +1,12 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { useState } from "react";
 import { LayoutGrid, Rows3 } from "lucide-react";
 
-import type { IssueDetailDto, IssueState, ProjectSummaryDto, WorkspaceMemberDto, WorkspaceSummaryDto } from "@wevlo/contracts";
+import type { IssueDetailDto, IssueListItemDto, IssueState, ProjectSummaryDto, WorkspaceMemberDto, WorkspaceSummaryDto } from "@wevlo/contracts";
 import { Button, cn } from "@wevlo/ui-web";
 
 import { CreateIssueDialog } from "@/components/create-issue-dialog";
@@ -15,12 +16,19 @@ import { IssueListTable } from "@/components/issue-list-table";
 import { PrototypeEmptyState } from "@/components/prototype-empty-state";
 import { PrototypeShell } from "@/components/prototype-shell";
 import { buildProjectShellHref, getIssueHref, transitionIssue } from "@/lib/issue-hub-data";
+import {
+  mergeIssueIntoSummaryCaches,
+  prependIssueToSummaryCache,
+  writeIssueDetailCache
+} from "@/lib/query-cache-helpers";
+import { useIssueDetailQuery, useIssueSummariesQuery } from "@/lib/query-hooks";
 import { buildUserDirectory } from "@/lib/user-directory";
 
 type ProjectShellSurfaceProps = {
   initialComposeOpen: boolean;
   initialIssueKey?: string;
-  initialIssues: IssueDetailDto[];
+  initialIssues: IssueListItemDto[];
+  initialScope: "all" | "assigned" | "created";
   initialView: "list" | "board";
   project: ProjectSummaryDto;
   projects: ProjectSummaryDto[];
@@ -35,7 +43,7 @@ type ProjectShellSurfaceProps = {
   workspaces: WorkspaceSummaryDto[];
 };
 
-function countOpenIssues(issues: IssueDetailDto[]) {
+function countOpenIssues(issues: IssueListItemDto[]) {
   return issues.filter((issue) => issue.state !== "done" && issue.state !== "canceled").length;
 }
 
@@ -43,6 +51,7 @@ export function ProjectShellSurface({
   initialComposeOpen,
   initialIssueKey,
   initialIssues,
+  initialScope,
   initialView,
   project,
   projects,
@@ -51,21 +60,24 @@ export function ProjectShellSurface({
   workspaceMembers,
   workspaces
 }: ProjectShellSurfaceProps) {
+  const queryClient = useQueryClient();
   const router = useRouter();
-  const [issues, setIssues] = useState(initialIssues);
   const [activeIssueKey, setActiveIssueKey] = useState(initialIssueKey);
   const [currentView, setCurrentView] = useState(initialView);
   const [isComposeOpen, setIsComposeOpen] = useState(initialComposeOpen);
   const [composeState, setComposeState] = useState<IssueState | undefined>(undefined);
   const [selectedIssueKeys, setSelectedIssueKeys] = useState<string[]>([]);
+  const issueSummariesQuery = useIssueSummariesQuery(workspace.slug, project.key, initialScope, {
+    initialData: initialIssues
+  });
+  const issues = issueSummariesQuery.data ?? [];
+  const selectedIssueQuery = useIssueDetailQuery(workspace.slug, project.key, activeIssueKey, {
+    enabled: Boolean(activeIssueKey)
+  });
 
   useEffect(() => {
-    setIssues(initialIssues);
-  }, [initialIssues]);
-
-  useEffect(() => {
-    setSelectedIssueKeys((current) => current.filter((issueKey) => initialIssues.some((issue) => issue.issueKey === issueKey)));
-  }, [initialIssues]);
+    setSelectedIssueKeys((current) => current.filter((issueKey) => issues.some((issue) => issue.issueKey === issueKey)));
+  }, [issues]);
 
   useEffect(() => {
     setActiveIssueKey(initialIssueKey);
@@ -79,10 +91,7 @@ export function ProjectShellSurface({
     setIsComposeOpen(initialComposeOpen);
   }, [initialComposeOpen]);
 
-  const selectedIssue = useMemo(
-    () => issues.find((issue) => issue.issueKey === activeIssueKey),
-    [activeIssueKey, issues]
-  );
+  const selectedIssue = selectedIssueQuery.data;
   const userDirectory = useMemo(() => buildUserDirectory(workspaceMembers), [workspaceMembers]);
 
   const projectHref = (options?: {
@@ -107,7 +116,7 @@ export function ProjectShellSurface({
     updateRoute({
       ...(currentView ? { view: currentView } : {}),
       ...(open ? { compose: true } : {}),
-      ...(selectedIssue ? { issueKey: selectedIssue.issueKey } : {})
+      ...(activeIssueKey ? { issueKey: activeIssueKey } : {})
     });
   };
 
@@ -119,7 +128,7 @@ export function ProjectShellSurface({
   const handleViewChange = (view: "list" | "board") => {
     setCurrentView(view);
     updateRoute({
-      ...(selectedIssue ? { issueKey: selectedIssue.issueKey } : {}),
+      ...(activeIssueKey ? { issueKey: activeIssueKey } : {}),
       view
     });
   };
@@ -150,11 +159,21 @@ export function ProjectShellSurface({
     if (createdProjectKey !== project.key) {
       setIsComposeOpen(Boolean(options?.keepComposerOpen));
       router.push(getIssueHref(workspace.slug, createdProjectKey, issue.issueKey));
-      router.refresh();
       return;
     }
 
-    setIssues((current) => [issue, ...current]);
+    writeIssueDetailCache(queryClient, {
+      issue,
+      projectKey: project.key,
+      workspaceSlug: workspace.slug
+    });
+    prependIssueToSummaryCache(queryClient, {
+      issue,
+      projectKey: project.key,
+      scope: initialScope,
+      viewerUserId: viewer.id,
+      workspaceSlug: workspace.slug
+    });
     setActiveIssueKey(issue.issueKey);
     setIsComposeOpen(Boolean(options?.keepComposerOpen));
 
@@ -164,12 +183,21 @@ export function ProjectShellSurface({
         view: currentView
       });
     }
-
-    router.refresh();
   };
 
   const handleIssueUpdated = (issue: IssueDetailDto) => {
-    setIssues((current) => current.map((candidate) => (candidate.id === issue.id ? issue : candidate)));
+    writeIssueDetailCache(queryClient, {
+      issue,
+      projectKey: project.key,
+      workspaceSlug: workspace.slug
+    });
+    mergeIssueIntoSummaryCaches(queryClient, {
+      currentScope: initialScope,
+      issue,
+      projectKey: project.key,
+      viewerUserId: viewer.id,
+      workspaceSlug: workspace.slug
+    });
   };
 
   const handleTransition = async (issueKey: string, state: IssueState) => {
@@ -281,6 +309,7 @@ export function ProjectShellSurface({
       </PrototypeShell>
 
       <IssueDetailInspector
+        isLoading={selectedIssueQuery.isLoading}
         onClose={handleIssueClose}
         onIssueUpdated={handleIssueUpdated}
         projectKey={project.key}
@@ -288,6 +317,7 @@ export function ProjectShellSurface({
         viewerUserId={viewer.id}
         workspaceMembers={workspaceMembers}
         workspaceSlug={workspace.slug}
+        {...(activeIssueKey ? { issueKey: activeIssueKey } : {})}
         {...(selectedIssue ? { issue: selectedIssue } : {})}
       />
 

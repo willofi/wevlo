@@ -49,8 +49,8 @@ import {
   demoUsers,
   type DemoUser
 } from "@wevlo/auth";
+import { buildBffApiPath } from "./api-paths";
 
-const apiBaseUrl = "/api/bff";
 const resourceReadAttempts = 5;
 const resourceReadDelayMs = 120;
 
@@ -74,7 +74,7 @@ const requestJson = async <TResponse>(
     headers["content-type"] = "application/json";
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(buildBffApiPath(path), {
     ...init,
     cache: "no-store",
     headers
@@ -404,7 +404,7 @@ export const waitForProjectRead = async (
   throw new Error(`Project ${normalizedProjectKey} was created, but it is not readable yet.`);
 };
 
-const listProjectIssueSummaries = async (
+export const listProjectIssueSummaries = async (
   workspaceSlug: string,
   projectKey: string,
   scope: "all" | "assigned" | "created" = "all"
@@ -649,7 +649,7 @@ export const uploadIssueAttachment = async (
   formData.set("file", file);
 
   const response = await fetch(
-    `${apiBaseUrl}/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/attachments`,
+    buildBffApiPath(`/workspaces/${workspaceSlug}/projects/${projectKey}/issues/${issueKey}/attachments`),
     {
       body: formData,
       cache: "no-store",

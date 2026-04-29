@@ -1,8 +1,8 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 
 import type { IssueDetailDto, ProjectSummaryDto, WorkspaceMemberDto, WorkspaceSummaryDto } from "@wevlo/contracts";
 import { Button } from "@wevlo/ui-web";
@@ -10,6 +10,8 @@ import { Button } from "@wevlo/ui-web";
 import { PrototypeShell } from "@/components/prototype-shell";
 import { IssueDetailEditor } from "@/components/issue-detail-editor";
 import { getProjectHref } from "@/lib/issue-hub-data";
+import { useIssueDetailQuery } from "@/lib/query-hooks";
+import { queryKeys } from "@/lib/query-keys";
 import { buildUserDirectory } from "@/lib/user-directory";
 
 type IssueDetailPageSurfaceProps = {
@@ -36,8 +38,18 @@ export function IssueDetailPageSurface({
   workspaceMembers,
   workspaces
 }: IssueDetailPageSurfaceProps) {
-  const [currentIssue, setCurrentIssue] = useState(issue);
+  const queryClient = useQueryClient();
+  const issueQuery = useIssueDetailQuery(workspace.slug, project.key, issue.issueKey, {
+    initialData: issue
+  });
+  const currentIssue = issueQuery.data ?? issue;
   const userDirectory = buildUserDirectory(workspaceMembers);
+  const handleIssueUpdated = (updatedIssue: IssueDetailDto) => {
+    queryClient.setQueryData(
+      queryKeys.issues.detail(workspace.slug, project.key, updatedIssue.issueKey),
+      updatedIssue
+    );
+  };
 
   return (
     <PrototypeShell
@@ -75,7 +87,7 @@ export function IssueDetailPageSurface({
       <IssueDetailEditor
         issue={currentIssue}
         mode="page"
-        onIssueUpdated={setCurrentIssue}
+        onIssueUpdated={handleIssueUpdated}
         projectKey={project.key}
         userDirectory={userDirectory}
         viewerUserId={viewer.id}

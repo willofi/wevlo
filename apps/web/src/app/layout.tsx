@@ -3,6 +3,7 @@ import "./globals.css";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 
+import { AppQueryProvider } from "@/components/app-query-provider";
 import { AppPreferencesProvider } from "@/components/app-preferences-provider";
 import { APP_PREFERENCES_COOKIE, parseAppPreferences } from "@/lib/app-preferences-shared";
 
@@ -72,7 +73,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             __html: themeBootScript
           }}
         />
-        <AppPreferencesProvider>{children}</AppPreferencesProvider>
+        <AppQueryProvider>
+          <AppPreferencesProvider>{children}</AppPreferencesProvider>
+        </AppQueryProvider>
       </body>
     </html>
   );

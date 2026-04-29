@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 
 import { authOptions } from "@/auth";
+import { buildApiV1Url } from "@/lib/api-paths";
 import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
 import { buildApiInternalAuthHeaders } from "@/lib/internal-auth-headers";
 
@@ -14,19 +15,6 @@ type BffRouteContext = {
 
 const apiBaseUrl = getWebApiBaseUrl();
 const internalToken = getInternalAuthToken();
-const apiV1Path = "/api/v1";
-
-const buildApiV1Url = (path: string): string => {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const base = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
-
-  if (base.endsWith(apiV1Path)) {
-    return `${base}${normalizedPath}`;
-  }
-
-  return `${base}${apiV1Path}${normalizedPath}`;
-};
-
 const isBodyAllowed = (method: string): boolean => {
   return method !== "GET" && method !== "HEAD";
 };
@@ -59,7 +47,7 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[]): Promi
 
   const body = isBodyAllowed(request.method) ? await request.arrayBuffer() : null;
   const path = pathSegments.join("/");
-  const upstreamUrl = buildApiV1Url(path);
+  const upstreamUrl = buildApiV1Url(apiBaseUrl, path);
   
   const upstream = await fetch(`${upstreamUrl}${request.nextUrl.search}`, {
     ...(body ? { body } : {}),

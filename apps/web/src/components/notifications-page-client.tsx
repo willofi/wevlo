@@ -1,7 +1,8 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, MailOpen, MessageSquareMore, UserRoundPlus, UserRoundSearch } from "lucide-react";
 
 import type { NotificationListStatus, ProjectSummaryDto, WorkspaceSummaryDto } from "@wevlo/contracts";
@@ -10,11 +11,16 @@ import { Button, Card, CardContent, CardHeader, CardTitle, cn } from "@wevlo/ui-
 import { useNotificationSummary } from "@/components/notification-summary-provider";
 import {
   archiveNotifications,
-  getNotifications,
-  getProjectsForWorkspace,
   markAllNotificationsRead,
   markNotificationsRead
 } from "@/lib/issue-hub-data";
+import {
+  optimisticMarkNotificationsRead,
+  restoreNotificationSummary,
+  updateNotificationListCache
+} from "@/lib/query-cache-helpers";
+import { useNotificationsQuery, useWorkspaceProjectsQuery } from "@/lib/query-hooks";
+import { queryKeys } from "@/lib/query-keys";
 
 type NotificationsPageClientProps = {
   initialProjectId?: string;
@@ -53,73 +59,36 @@ export function NotificationsPageClient({
   workspaces
 }: NotificationsPageClientProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { refresh } = useNotificationSummary();
-  const [items, setItems] = useState<Array<Awaited<ReturnType<typeof getNotifications>>["items"][number]>>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [projects, setProjects] = useState<ProjectSummaryDto[]>([]);
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
   const [status, setStatus] = useState<NotificationListStatus>(initialStatus);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? "");
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === workspaceId),
+    [workspaceId, workspaces]
+  );
+  const notificationFilters = useMemo(
+    () => ({
+      ...(projectId ? { projectId } : {}),
+      status,
+      ...(workspaceId ? { workspaceId } : {})
+    }),
+    [projectId, status, workspaceId]
+  );
+  const notificationsQuery = useNotificationsQuery(notificationFilters);
+  const workspaceProjectsQuery = useWorkspaceProjectsQuery(selectedWorkspace?.slug, {
+    enabled: Boolean(selectedWorkspace)
+  });
+  const items = notificationsQuery.data?.items ?? [];
+  const projects = workspaceProjectsQuery.data ?? [];
+  const isLoading = notificationsQuery.isLoading;
 
   useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      setIsLoading(true);
-
-      try {
-        const response = await getNotifications({
-          ...(projectId ? { projectId } : {}),
-          status,
-          ...(workspaceId ? { workspaceId } : {})
-        });
-
-        if (!cancelled) {
-          setItems(response.items);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, status, workspaceId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const selectedWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
-
-    if (!selectedWorkspace) {
-      setProjects([]);
+    if (projectId && !projects.some((project) => project.id === projectId)) {
       setProjectId("");
-      return;
     }
-
-    const loadProjects = async () => {
-      const nextProjects = await getProjectsForWorkspace(selectedWorkspace.slug);
-
-      if (!cancelled) {
-        setProjects(nextProjects);
-
-        if (projectId && !nextProjects.some((project) => project.id === projectId)) {
-          setProjectId("");
-        }
-      }
-    };
-
-    void loadProjects();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, workspaceId, workspaces]);
+  }, [projectId, projects]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams();
@@ -140,28 +109,71 @@ export function NotificationsPageClient({
     router.replace(query.length > 0 ? `/notifications?${query}` : "/notifications", { scroll: false });
   }, [projectId, router, status, workspaceId]);
 
+  const markReadMutation = useMutation({
+    mutationFn: markNotificationsRead,
+    onError: (_error, _ids, context) => {
+      restoreNotificationSummary(queryClient, context?.previousSummary);
+    },
+    onMutate: async (ids: string[]) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.notifications.summary() });
+      await queryClient.cancelQueries({ queryKey: queryKeys.notifications.list(notificationFilters) });
+
+      const previousSummary = optimisticMarkNotificationsRead(queryClient, ids);
+      updateNotificationListCache(queryClient, {
+        filters: notificationFilters,
+        updater: (current) => ({
+          ...current,
+          items: current.items.map((item) =>
+            ids.includes(item.id)
+              ? {
+                  ...item,
+                  readAt: item.readAt ?? new Date().toISOString(),
+                  seenAt: item.seenAt ?? new Date().toISOString()
+                }
+              : item
+          ),
+          unreadCount: Math.max(0, current.unreadCount - current.items.filter((item) => item.readAt === null && ids.includes(item.id)).length),
+          unseenCount: Math.max(0, current.unseenCount - current.items.filter((item) => item.seenAt === null && ids.includes(item.id)).length)
+        })
+      });
+
+      return { previousSummary };
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.summary() });
+      await queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
+    }
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: archiveNotifications,
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.summary() });
+      await queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
+    }
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.summary() });
+      await queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
+    }
+  });
+
   const handleItemOpen = async (id: string, href: string) => {
-    await markNotificationsRead([id]);
-    await refresh();
+    await markReadMutation.mutateAsync([id]);
     router.push(href);
   };
 
   const handleArchive = async (id: string) => {
-    await archiveNotifications([id]);
+    await archiveMutation.mutateAsync([id]);
     await refresh();
-    setItems((current) => current.filter((item) => item.id !== id));
   };
 
   const handleMarkAllRead = async () => {
-    await markAllNotificationsRead();
+    await markAllReadMutation.mutateAsync();
     await refresh();
-    setItems((current) =>
-      current.map((item) => ({
-        ...item,
-        readAt: item.readAt ?? new Date().toISOString(),
-        seenAt: item.seenAt ?? new Date().toISOString()
-      }))
-    );
   };
 
   return (

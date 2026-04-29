@@ -73,7 +73,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
     const route = request.routeOptions.url;
     const dbMetrics = (request as any).__dbQueryMetrics as DbQueryMetrics | undefined;
 
-    if (dbMetrics && route && (route.includes("/issues") || route.includes("/board"))) {
+    if (dbMetrics && route && (route.includes("/issues") || route.includes("/board") || route.includes("/notifications"))) {
       request.log.info({
         tag: "perf.db.request",
         method: request.method,

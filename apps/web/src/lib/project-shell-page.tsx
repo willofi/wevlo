@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-import type { IssueDetailDto, ProjectSummaryDto, WorkspaceSummaryDto } from "@wevlo/contracts";
+import type { IssueListItemDto, ProjectSummaryDto, WorkspaceSummaryDto } from "@wevlo/contracts";
 
 import { ShellPageState } from "@/components/shell-page-state";
 import {
-  getIssuesForProject,
+  getIssueSummariesForProject,
   getProjectByKey,
   getProjectsForWorkspace,
   getWorkspaceBySlug
@@ -14,7 +14,7 @@ import { getRequestStatus } from "@/lib/request-error";
 type ProjectSurface = "issues" | "board" | "triage" | "issue";
 
 type LoadedProjectShellData = {
-  issues: IssueDetailDto[];
+  issues: IssueListItemDto[];
   project: ProjectSummaryDto;
   projects: ProjectSummaryDto[];
   workspace: WorkspaceSummaryDto;
@@ -148,7 +148,7 @@ export const loadProjectShellPageData = async (input: {
     getProjectsForWorkspace(workspace.slug),
     input.includeIssues === false
       ? Promise.resolve([])
-      : getIssuesForProject(workspace.slug, project.key, input.scope ?? "all")
+      : getIssueSummariesForProject(workspace.slug, project.key, input.scope ?? "all")
   ]);
 
   return {

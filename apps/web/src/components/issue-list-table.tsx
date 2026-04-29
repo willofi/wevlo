@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import type { KeyboardEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Plus, Tag, UserCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import type { IssueDetailDto, IssueLabelDto, IssuePriority, WorkspaceMemberDto } from "@wevlo/contracts";
+import type { IssueDetailDto, IssueLabelDto, IssueListItemDto, IssuePriority, WorkspaceMemberDto } from "@wevlo/contracts";
 import {
   Avatar,
   AvatarFallback,
@@ -30,11 +31,12 @@ import {
   renderProjectBoardIcon
 } from "@/lib/issue-presentation";
 import type { UserDirectory } from "@/lib/user-directory";
+import { queryKeys } from "@/lib/query-keys";
 
 type IssueListTableProps = {
   assigneeDirectory?: UserDirectory;
   currentIssueKey?: string;
-  issues: IssueDetailDto[];
+  issues: IssueListItemDto[];
   onIssueSelect?: (issueKey: string) => void;
   onIssueUpdated?: (issue: IssueDetailDto) => void;
   onCreateIssue?: (state: IssueDetailDto["state"]) => void;
@@ -49,9 +51,9 @@ type IssueListTableProps = {
   workspaceSlugByProjectId?: Record<string, string>;
 };
 
-const stateOrder: IssueDetailDto["state"][] = ["backlog", "todo", "in_progress", "done", "canceled"];
+const stateOrder: IssueListItemDto["state"][] = ["backlog", "todo", "in_progress", "done", "canceled"];
 
-const stateLabel: Record<IssueDetailDto["state"], string> = {
+const stateLabel: Record<IssueListItemDto["state"], string> = {
   backlog: "Backlog",
   todo: "Todo",
   in_progress: "In Progress",
@@ -80,8 +82,9 @@ export function IssueListTable({
   workspaceSlugByProjectId = {}
 }: IssueListTableProps) {
   const router = useRouter();
-  const [localIssues, setLocalIssues] = useState<IssueDetailDto[]>(issues);
-  const [collapsedStates, setCollapsedStates] = useState<Record<IssueDetailDto["state"], boolean>>({
+  const queryClient = useQueryClient();
+  const [localIssues, setLocalIssues] = useState<IssueListItemDto[]>(issues);
+  const [collapsedStates, setCollapsedStates] = useState<Record<IssueListItemDto["state"], boolean>>({
     backlog: false,
     todo: false,
     in_progress: false,
@@ -114,7 +117,11 @@ export function IssueListTable({
         const projectKey = projectKeyById[projectId];
         if (projectKey) {
           try {
-            const labels = await listProjectLabels(workspaceSlug, projectKey);
+            const labels = await queryClient.fetchQuery({
+              queryFn: () => listProjectLabels(workspaceSlug, projectKey),
+              queryKey: queryKeys.project.labels(workspaceSlug, projectKey),
+              staleTime: 5 * 60 * 1000
+            });
             setLabelsByProjectId((current) => ({
               ...current,
               [projectId]: labels
@@ -128,7 +135,7 @@ export function IssueListTable({
         }
       }
     })();
-  }, [localIssues, labelsByProjectId, projectKeyById, workspaceSlug]);
+  }, [localIssues, labelsByProjectId, projectKeyById, queryClient, workspaceSlug]);
 
   const selectedIssueKeySet = useMemo(() => new Set(selectedIssueKeys), [selectedIssueKeys]);
   const stateOptions = useMemo(() => buildProjectStateOptions(undefined), []);
@@ -186,7 +193,7 @@ export function IssueListTable({
   };
 
   const handlePriorityChange = async (
-    issue: IssueDetailDto,
+    issue: IssueListItemDto,
     nextPriority: IssuePriority,
     rowWorkspaceSlug: string,
     projectKey: string
@@ -220,7 +227,7 @@ export function IssueListTable({
   };
 
   const handleAssigneeChange = async (
-    issue: IssueDetailDto,
+    issue: IssueListItemDto,
     nextAssigneeUserId: string | null,
     rowWorkspaceSlug: string,
     projectKey: string
@@ -254,7 +261,7 @@ export function IssueListTable({
   };
 
   const handleLabelChange = async (
-    issue: IssueDetailDto,
+    issue: IssueListItemDto,
     nextLabelIds: string[],
     rowWorkspaceSlug: string,
     projectKey: string
@@ -289,8 +296,8 @@ export function IssueListTable({
   };
 
   const handleStateChange = async (
-    issue: IssueDetailDto,
-    nextState: IssueDetailDto["state"],
+    issue: IssueListItemDto,
+    nextState: IssueListItemDto["state"],
     rowWorkspaceSlug: string,
     projectKey: string
   ) => {

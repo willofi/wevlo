@@ -19,6 +19,7 @@ import type {
 } from "@wevlo/contracts";
 import { redirect } from "next/navigation";
 
+import { buildApiV1Url } from "@/lib/api-paths";
 import { requireCurrentAuthSession } from "@/lib/auth-server";
 import { buildApiInternalAuthHeaders } from "@/lib/internal-auth-headers";
 import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
@@ -26,18 +27,6 @@ import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
 const apiBaseUrl = getWebApiBaseUrl();
 const internalToken = getInternalAuthToken();
 const isProfileSetupRequired = (me: MeDto): boolean => me.user.name.trim().length === 0;
-const apiV1Path = "/api/v1";
-
-const buildApiUrl = (path: string): string => {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const base = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
-
-  if (base.endsWith(apiV1Path)) {
-    return `${base}${normalizedPath}`;
-  }
-
-  return `${base}${apiV1Path}${normalizedPath}`;
-};
 
 const requestJson = async <TResponse>(
   path: string,
@@ -48,7 +37,7 @@ const requestJson = async <TResponse>(
 ): Promise<TResponse | null> => {
   const session = await requireCurrentAuthSession();
 
-  const response = await fetch(buildApiUrl(path), {
+  const response = await fetch(buildApiV1Url(apiBaseUrl, path), {
     ...init,
     cache: "no-store",
     headers: {
@@ -167,7 +156,7 @@ export const getProjectIntegrations = async (
   };
 };
 
-const listProjectIssueSummaries = async (
+export const getIssueSummariesForProject = async (
   workspaceSlug: string,
   projectKey: string,
   scope: "all" | "assigned" | "created" = "all"

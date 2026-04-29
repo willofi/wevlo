@@ -5,7 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import type { IssueDetailDto, IssueState } from "@wevlo/contracts";
+import type { IssueListItemDto, IssueState } from "@wevlo/contracts";
 import { Avatar, AvatarFallback, Badge, cn } from "@wevlo/ui-web";
 
 import { buildProjectShellHref } from "@/lib/issue-hub-data";
@@ -15,7 +15,7 @@ import { getDirectoryUserLabel } from "@/lib/user-directory";
 type IssueBoardViewProps = {
   assigneeDirectory?: UserDirectory;
   currentIssueKey?: string;
-  issues: IssueDetailDto[];
+  issues: IssueListItemDto[];
   onTransitionIssue: (issueKey: string, state: IssueState) => Promise<void> | void;
   projectKey: string;
   workspaceSlug: string;
@@ -40,7 +40,7 @@ function DraggableIssueCard({
 }: {
   active: boolean;
   assigneeDirectory: UserDirectory;
-  issue: IssueDetailDto;
+  issue: IssueListItemDto;
   projectKey: string;
   workspaceSlug: string;
 }) {
@@ -104,7 +104,7 @@ function BoardColumn({
   activeIssueKey: string | undefined;
   assigneeDirectory: UserDirectory;
   currentIssueKey: string | undefined;
-  issues: IssueDetailDto[];
+  issues: IssueListItemDto[];
   projectKey: string;
   state: IssueState;
   workspaceSlug: string;
@@ -160,7 +160,7 @@ export function IssueBoardView({
             .filter((issue) => issue.state === state)
             .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
         ])
-      ) as Record<IssueState, IssueDetailDto[]>,
+      ) as Record<IssueState, IssueListItemDto[]>,
     [issues]
   );
   const activeIssue = activeIssueKey ? issues.find((issue) => issue.issueKey === activeIssueKey) ?? null : null;

@@ -48,6 +48,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     <ProjectShellSurface
       initialComposeOpen={resolvedSearchParams.compose === "1"}
       initialIssues={issues}
+      initialScope={resolvedSearchParams.scope ?? "all"}
       initialView={resolvedSearchParams.view === "board" ? "board" : "list"}
       project={project}
       projects={projects}

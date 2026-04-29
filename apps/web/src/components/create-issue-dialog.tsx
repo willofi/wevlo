@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   Calendar,
@@ -48,9 +49,10 @@ import {
   createProjectLabel,
   getProjectBoardConfig,
   getWorkspaceMemberHref,
-  listProjectLabels,
   uploadIssueAttachment
 } from "@/lib/issue-hub-data";
+import { useProjectLabelsQuery } from "@/lib/query-hooks";
+import { queryKeys } from "@/lib/query-keys";
 
 type CreateIssueDialogProps = {
   initialState?: IssueState | undefined;
@@ -73,6 +75,7 @@ export function CreateIssueDialog({
   workspaceMembers,
   workspaceSlug
 }: CreateIssueDialogProps) {
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -80,7 +83,6 @@ export function CreateIssueDialog({
   const [priority, setPriority] = useState<IssuePriority>("none");
   const [assigneeUserId, setAssigneeUserId] = useState<string | null>(null);
   const [selectedProjectKey, setSelectedProjectKey] = useState(projectKey ?? "");
-  const [labels, setLabels] = useState<IssueLabelDto[]>([]);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -98,6 +100,10 @@ export function CreateIssueDialog({
     ({ userId }: { handle: string; userId: string }) => getWorkspaceMemberHref(workspaceSlug, userId),
     [workspaceSlug]
   );
+  const labelsQuery = useProjectLabelsQuery(workspaceSlug, selectedProjectKey || undefined, {
+    enabled: open && selectedProjectKey.length > 0
+  });
+  const labels = labelsQuery.data ?? [];
 
   useEffect(() => {
     if (!open) {
@@ -116,7 +122,6 @@ export function CreateIssueDialog({
     }
 
     if (!selectedProjectKey) {
-      setLabels([]);
       setBoardConfigColumns([]);
       setSelectedLabelIds([]);
       return;
@@ -126,19 +131,13 @@ export function CreateIssueDialog({
 
     const loadProjectMetadata = async () => {
       try {
-        const [nextLabels, nextBoardConfig] = await Promise.all([
-          listProjectLabels(workspaceSlug, selectedProjectKey),
-          getProjectBoardConfig(workspaceSlug, selectedProjectKey)
-        ]);
+        const nextBoardConfig = await getProjectBoardConfig(workspaceSlug, selectedProjectKey);
 
         if (!cancelled) {
-          setLabels(nextLabels);
           setBoardConfigColumns(nextBoardConfig.columns);
-          setSelectedLabelIds((current) => current.filter((labelId) => nextLabels.some((label) => label.id === labelId)));
         }
       } catch {
         if (!cancelled) {
-          setLabels([]);
           setBoardConfigColumns([]);
           setSelectedLabelIds([]);
         }
@@ -151,6 +150,10 @@ export function CreateIssueDialog({
       cancelled = true;
     };
   }, [open, selectedProjectKey, workspaceSlug]);
+
+  useEffect(() => {
+    setSelectedLabelIds((current) => current.filter((labelId) => labels.some((label) => label.id === labelId)));
+  }, [labels]);
 
   const selectedProject = projects.find((project) => project.key === selectedProjectKey);
   const selectedAssignee = workspaceMembers.find((member) => member.userId === assigneeUserId);
@@ -286,10 +289,14 @@ export function CreateIssueDialog({
         name: trimmedName
       });
 
-      setLabels((current) => {
-        const deduped = current.some((label) => label.id === createdLabel.id) ? current : [...current, createdLabel];
-        return [...deduped].sort((left, right) => left.name.localeCompare(right.name));
-      });
+      queryClient.setQueryData<IssueLabelDto[] | undefined>(
+        queryKeys.project.labels(workspaceSlug, selectedProjectKey),
+        (current) => {
+          const next = current ?? [];
+          const deduped = next.some((label) => label.id === createdLabel.id) ? next : [...next, createdLabel];
+          return [...deduped].sort((left, right) => left.name.localeCompare(right.name));
+        }
+      );
       setSelectedLabelIds((current) => [...new Set([...current, createdLabel.id])]);
       setNewLabelName("");
       setLabelSearch("");
