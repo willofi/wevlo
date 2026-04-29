@@ -15,9 +15,9 @@ describe("authorization policy", () => {
     expect(canWorkspace("Developer", "workspace.manage")).toBe(false);
   });
 
-  it("lets members view and invite to the workspace", () => {
+  it("keeps members in read-only workspace access", () => {
     expect(canWorkspace("Member", "workspace.view")).toBe(true);
-    expect(canWorkspace("Member", "workspace.invite")).toBe(true);
+    expect(canWorkspace("Member", "workspace.invite")).toBe(false);
     expect(canWorkspace("Member", "workspace.manage")).toBe(false);
   });
 

@@ -186,7 +186,28 @@ const hashInvitationToken = (token: string): string => {
 };
 
 export class PostgresIdentityRepository {
+  private acceptTokenHashColumnAvailable: boolean | null = null;
+
   constructor(private readonly database: DatabaseExecutor) {}
+
+  private async hasAcceptTokenHashColumn(): Promise<boolean> {
+    if (this.acceptTokenHashColumnAvailable !== null) {
+      return this.acceptTokenHashColumnAvailable;
+    }
+
+    const result = await sql<{ exists: boolean }>`
+      select exists (
+        select 1
+        from information_schema.columns
+        where table_name = 'workspace_invitations'
+          and column_name = 'accept_token_hash'
+      ) as "exists"
+    `.execute(this.database);
+
+    const exists = Boolean(result.rows[0]?.exists);
+    this.acceptTokenHashColumnAvailable = exists;
+    return exists;
+  }
 
   private async grantWorkspaceProjectVisibility(
     executor: DatabaseExecutor,
@@ -581,12 +602,16 @@ export class PostgresIdentityRepository {
 
   async findInvitationByToken(token: string): Promise<WorkspaceInvitationDto | null> {
     const tokenHash = hashInvitationToken(token);
+    const rowByHashedToken = (await this.hasAcceptTokenHashColumn())
+      ? await this.database
+          .selectFrom("workspace_invitations")
+          .selectAll()
+          .where("accept_token_hash", "=", tokenHash)
+          .executeTakeFirst()
+      : null;
+
     const row =
-      (await this.database
-        .selectFrom("workspace_invitations")
-        .selectAll()
-        .where("accept_token_hash", "=", tokenHash)
-        .executeTakeFirst()) ??
+      rowByHashedToken ??
       (await this.database
         .selectFrom("workspace_invitations")
         .selectAll()
@@ -634,6 +659,19 @@ export class PostgresIdentityRepository {
     return row ? mapWorkspaceInvitationRow(row) : null;
   }
 
+  async findInvitationByEmail(workspaceId: string, email: string): Promise<WorkspaceInvitationDto | null> {
+    const row = await this.database
+      .selectFrom("workspace_invitations")
+      .selectAll()
+      .where("workspace_id", "=", workspaceId)
+      .where("project_id", "is", null)
+      .where("invitee_email", "=", email)
+      .where("status", "=", "pending")
+      .executeTakeFirst();
+
+    return row ? mapWorkspaceInvitationRow(row) : null;
+  }
+
   async createInvitation(input: {
     inviteeEmail?: string | null;
     inviteeUserId?: string | null;
@@ -641,19 +679,13 @@ export class PostgresIdentityRepository {
     role: WorkspaceRole;
     workspaceId: string;
   }): Promise<WorkspaceInvitationDto> {
-    const existingPending = input.inviteeEmail
-      ? await this.database
-          .selectFrom("workspace_invitations")
-          .selectAll()
-          .where("workspace_id", "=", input.workspaceId)
-          .where("project_id", "is", null)
-          .where("invitee_email", "=", input.inviteeEmail)
-          .where("status", "=", "pending")
-          .executeTakeFirst()
-      : null;
+    const existingPending =
+      input.inviteeEmail
+        ? await this.findInvitationByEmail(input.workspaceId, input.inviteeEmail)
+        : null;
 
     if (existingPending) {
-      return mapWorkspaceInvitationRow(existingPending);
+      return existingPending;
     }
 
     const invitation = createWorkspaceInvitation({
@@ -664,11 +696,17 @@ export class PostgresIdentityRepository {
       workspaceId: input.workspaceId as WorkspaceId
     });
 
+    const includeAcceptTokenHash = await this.hasAcceptTokenHashColumn();
+
     await this.database
       .insertInto("workspace_invitations")
       .values({
         accept_token: null,
-        accept_token_hash: invitation.acceptToken ? hashInvitationToken(invitation.acceptToken) : null,
+        ...(includeAcceptTokenHash
+          ? {
+              accept_token_hash: invitation.acceptToken ? hashInvitationToken(invitation.acceptToken) : null
+            }
+          : {}),
         accepted_at: invitation.acceptedAt,
         accepted_by_user_id: invitation.acceptedByUserId,
         created_at: invitation.createdAt,
@@ -702,13 +740,14 @@ export class PostgresIdentityRepository {
     }
 
     const nextInvitation = acceptWorkspaceInvitation(mapWorkspaceInvitationRow(existingRow), acceptedByUserId);
+    const includeAcceptTokenHash = await this.hasAcceptTokenHashColumn();
 
     await this.database.transaction().execute(async (trx) => {
       await trx
         .updateTable("workspace_invitations")
         .set({
           accept_token: nextInvitation.acceptToken,
-          accept_token_hash: null,
+          ...(includeAcceptTokenHash ? { accept_token_hash: null } : {}),
           accepted_at: nextInvitation.acceptedAt,
           accepted_by_user_id: nextInvitation.acceptedByUserId,
           status: nextInvitation.status,
@@ -766,12 +805,13 @@ export class PostgresIdentityRepository {
     }
 
     const invitation = revokeWorkspaceInvitation(mapWorkspaceInvitationRow(row));
+    const includeAcceptTokenHash = await this.hasAcceptTokenHashColumn();
 
     await this.database
       .updateTable("workspace_invitations")
       .set({
         accept_token: invitation.acceptToken,
-        accept_token_hash: null,
+        ...(includeAcceptTokenHash ? { accept_token_hash: null } : {}),
         status: invitation.status,
         updated_at: invitation.updatedAt
       })

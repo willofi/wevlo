@@ -1,20 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, MoonStar, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, MoonStar, ShieldCheck, UserRound } from "lucide-react";
 
-import type { UserDto } from "@wevlo/contracts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, cn } from "@wevlo/ui-web";
+import type { UserDto, WorkspaceSummaryDto } from "@wevlo/contracts";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  cn
+} from "@wevlo/ui-web";
 
 import { ProfileEditorForm } from "@/components/profile-editor-form";
 import { ThemeModePicker } from "@/components/theme-mode-picker";
+import {
+  WorkspaceMembersSettingsSection,
+  type WorkspaceSettingsSectionData
+} from "@/components/workspace-members-settings-section";
 
-type SettingsSection = "preferences" | "profile";
+type SettingsSection = "preferences" | "profile" | "workspace";
 
 type SettingsPageClientProps = {
   backHref: string;
   initialSection: SettingsSection;
+  initialWorkspaceSlug: string | null;
   user: UserDto;
+  workspaces: WorkspaceSummaryDto[];
+  workspaceSectionData: WorkspaceSettingsSectionData | null;
 };
 
 const navItems: Array<{
@@ -37,6 +57,13 @@ const navItems: Array<{
     icon: UserRound,
     key: "profile",
     label: "Profile"
+  },
+  {
+    description: "Workspace members and permissions",
+    href: "/settings?section=workspace",
+    icon: ShieldCheck,
+    key: "workspace",
+    label: "Workspace"
   }
 ];
 
@@ -125,10 +152,79 @@ function ProfileSection({ user }: { user: UserDto }) {
   );
 }
 
+function WorkspaceSection({
+  initialWorkspaceSlug,
+  workspaceSectionData,
+  workspaces
+}: {
+  initialWorkspaceSlug: string | null;
+  workspaceSectionData: WorkspaceSettingsSectionData | null;
+  workspaces: WorkspaceSummaryDto[];
+}) {
+  const router = useRouter();
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Workspace</h1>
+      </div>
+      <Card className="rounded-[28px] border-border/70 shadow-none">
+        <CardHeader className="space-y-1 pb-4">
+          <CardTitle>Workspace</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-0">
+          {workspaces.length === 0 ? (
+            <div className="rounded-2xl bg-secondary/45 px-4 py-3 text-sm leading-6 text-muted-foreground">
+              아직 접근 가능한 워크스페이스가 없어요.
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-2">
+                <div className="grid gap-2">
+                  <label htmlFor="workspace-selector" className="text-xs font-medium text-muted-foreground">
+                    Workspace 선택
+                  </label>
+                  <Select
+                    value={initialWorkspaceSlug ?? ""}
+                    onValueChange={(slug) => {
+                      router.push(`/settings?section=workspace&workspaceSlug=${encodeURIComponent(slug)}`);
+                    }}
+                  >
+                    <SelectTrigger id="workspace-selector" className="h-11 rounded-2xl bg-background/70">
+                      <SelectValue placeholder="워크스페이스를 선택하세요" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {workspaces.map((workspace) => (
+                        <SelectItem key={workspace.id} value={workspace.slug}>
+                          {workspace.name} ({workspace.slug})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {workspaceSectionData ? (
+                <WorkspaceMembersSettingsSection data={workspaceSectionData} />
+              ) : (
+                <div className="rounded-2xl bg-secondary/45 px-4 py-3 text-sm leading-6 text-muted-foreground">
+                  선택한 워크스페이스 정보를 불러오지 못했어요.
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function SettingsPageClient({
   backHref,
   initialSection,
-  user
+  initialWorkspaceSlug,
+  user,
+  workspaces,
+  workspaceSectionData
 }: SettingsPageClientProps) {
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -171,7 +267,15 @@ export function SettingsPageClient({
         </aside>
 
         <main className="min-w-0">
-          {initialSection === "preferences" ? <PreferencesSection /> : <ProfileSection user={user} />}
+          {initialSection === "preferences" ? <PreferencesSection /> : null}
+          {initialSection === "profile" ? <ProfileSection user={user} /> : null}
+          {initialSection === "workspace" ? (
+            <WorkspaceSection
+              initialWorkspaceSlug={initialWorkspaceSlug}
+              workspaceSectionData={workspaceSectionData}
+              workspaces={workspaces}
+            />
+          ) : null}
         </main>
       </div>
     </div>

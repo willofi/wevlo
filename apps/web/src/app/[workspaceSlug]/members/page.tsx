@@ -8,5 +8,5 @@ type MembersPageProps = {
 
 export default async function MembersPage({ params }: MembersPageProps) {
   const { workspaceSlug } = await params;
-  permanentRedirect(`/${workspaceSlug}/settings/members`);
+  permanentRedirect(`/settings?section=workspace&workspaceSlug=${encodeURIComponent(workspaceSlug)}`);
 }

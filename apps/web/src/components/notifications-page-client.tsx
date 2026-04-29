@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Bell, MailOpen, MessageSquareMore, UserRoundPlus, UserRoundSearch } from "lucide-react";
 
-import type { NotificationListStatus, ProjectSummaryDto, WorkspaceSummaryDto } from "@wevlo/contracts";
+import type { NotificationListStatus, WorkspaceSummaryDto } from "@wevlo/contracts";
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from "@wevlo/ui-web";
 
 import { useNotificationSummary } from "@/components/notification-summary-provider";

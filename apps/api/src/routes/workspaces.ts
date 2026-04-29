@@ -254,6 +254,7 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
         const inviteResult = await fastify.database.transaction().execute(async (trx) => {
           const scoped = fastify.createScopedRepositories(trx);
           const existingUser = await scoped.identityRepository.findUserByEmail(email);
+          const existingPendingInvitation = await scoped.identityRepository.findInvitationByEmail(workspace.id, email);
 
           if (existingUser && !inviteAcceptRequired) {
             await scoped.identityRepository.createMember({
@@ -267,7 +268,19 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
               expiresAt: null as string | null,
               invitationId: null as string | null,
               inviteToken: null as string | null,
+              reason: null,
               status: "already_member" as const
+            };
+          }
+
+          if (existingPendingInvitation) {
+            return {
+              email,
+              expiresAt: existingPendingInvitation.expiresAt,
+              invitationId: existingPendingInvitation.id,
+              inviteToken: existingPendingInvitation.acceptToken,
+              reason: "invite_already_pending" as const,
+              status: "failed" as const
             };
           }
 
@@ -312,6 +325,7 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
             expiresAt: createdInvitation.expiresAt,
             invitationId: createdInvitation.id,
             inviteToken: createdInvitation.acceptToken,
+            reason: null,
             status: "created" as const
           };
         });
@@ -324,6 +338,16 @@ const workspaceRoutes: FastifyPluginAsync = async (fastify) => {
             email,
             invitationId: null,
             reason: null,
+            status: inviteResult.status
+          });
+          continue;
+        }
+
+        if (inviteResult.reason === "invite_already_pending") {
+          results.push({
+            email,
+            invitationId: inviteResult.invitationId,
+            reason: inviteResult.reason,
             status: inviteResult.status
           });
           continue;

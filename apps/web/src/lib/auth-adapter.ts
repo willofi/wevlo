@@ -60,6 +60,18 @@ export async function createInternalAuthUser(input: { email: string; name?: stri
   });
 }
 
+export async function linkInternalAuthAccount(input: {
+  email?: string;
+  provider: string;
+  providerUserId: string;
+  userId: string;
+}): Promise<UserDto | null> {
+  return internalApiFetch<UserDto>("/internal/auth/users/link", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
 export async function createInternalVerificationToken(input: VerificationTokenDto): Promise<VerificationTokenDto | null> {
   return internalApiFetch<VerificationTokenDto>("/internal/auth/verification-tokens", {
     method: "POST",
@@ -118,14 +130,13 @@ export function WevloAuthAdapter(): Adapter {
     },
 
     async linkAccount(account: AdapterAccount) {
-      await internalApiFetch("/internal/auth/users/link", {
-        method: "POST",
-        body: JSON.stringify({
-          email: account.email ?? undefined,
-          provider: account.provider,
-          providerUserId: account.providerAccountId,
-          userId: account.userId
-        })
+      const email = typeof account.email === "string" ? account.email : null;
+
+      await linkInternalAuthAccount({
+        provider: account.provider,
+        providerUserId: account.providerAccountId,
+        userId: account.userId,
+        ...(email ? { email } : {})
       });
     },
 

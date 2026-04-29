@@ -15,6 +15,7 @@ import {
   createInternalAuthUser,
   getInternalAuthUserByEmail,
   getInternalAuthUserById,
+  linkInternalAuthAccount,
   WevloAuthAdapter
 } from "@/lib/auth-adapter";
 
@@ -143,12 +144,14 @@ export const authOptions: NextAuthOptions = {
       }
 
       const existing = await getInternalAuthUserByEmail(providerEmail);
-      if (!existing) {
-        return true;
-      }
 
-      if (existing.id !== user.id) {
-        return "/login?error=oauth_link_conflict";
+      if (existing && account.providerAccountId) {
+        await linkInternalAuthAccount({
+          email: providerEmail,
+          provider: account.provider,
+          providerUserId: account.providerAccountId,
+          userId: existing.id
+        });
       }
 
       return true;
@@ -173,7 +176,24 @@ export const authOptions: NextAuthOptions = {
           ?? String(user.id);
         token.role = (user as { role?: WorkspaceRole }).role ?? "Member";
         token.userId = String(user.id);
+        token.sub = String(user.id);
         token.workspaceSlugs = (user as { workspaceSlugs?: string[] }).workspaceSlugs ?? [];
+      }
+
+      if (
+        token.provider === "google" &&
+        typeof token.email === "string" &&
+        token.email.trim().length > 0
+      ) {
+        const canonicalUser = await getInternalAuthUserByEmail(token.email.trim().toLowerCase());
+
+        if (canonicalUser) {
+          token.avatarUrl = canonicalUser.avatarUrl ?? token.avatarUrl ?? null;
+          token.email = canonicalUser.email ?? token.email ?? null;
+          token.name = canonicalUser.name ?? token.name ?? null;
+          token.sub = canonicalUser.id;
+          token.userId = canonicalUser.id;
+        }
       }
 
       if ((!token.email || !token.name || !token.avatarUrl) && typeof token.sub === "string") {

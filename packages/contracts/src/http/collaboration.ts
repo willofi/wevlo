@@ -24,10 +24,17 @@ export const createWorkspaceInvitationRequestSchema = z
     message: "userId, email, or emails is required"
   });
 
+export const workspaceInvitationFailureReasonSchema = z.enum([
+  "invalid_email",
+  "email_send_failed",
+  "invite_create_failed",
+  "invite_already_pending"
+]);
+
 export const workspaceInvitationResultSchema = z.object({
   email: z.string().min(1),
   invitationId: z.string().nullable(),
-  reason: z.string().nullable(),
+  reason: workspaceInvitationFailureReasonSchema.nullable(),
   status: z.enum(["created", "already_member", "failed"])
 });
 
@@ -49,6 +56,7 @@ export type CreateWorkspaceMemberRequest = z.infer<typeof createWorkspaceMemberR
 export type CreateProjectMemberRequest = z.infer<typeof createProjectMemberRequestSchema>;
 export type CreateWorkspaceInvitationRequest = z.infer<typeof createWorkspaceInvitationRequestSchema>;
 export type CreateProjectInvitationRequest = z.infer<typeof createProjectInvitationRequestSchema>;
+export type WorkspaceInvitationFailureReason = z.infer<typeof workspaceInvitationFailureReasonSchema>;
 export type WorkspaceInvitationResult = z.infer<typeof workspaceInvitationResultSchema>;
 export type CreateWorkspaceInvitationsResponse = z.infer<typeof createWorkspaceInvitationsResponseSchema>;
 

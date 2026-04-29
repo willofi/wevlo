@@ -6,6 +6,7 @@ import { cn } from "@wevlo/ui-web";
 
 import { getAppShellData } from "@/lib/app-shell-data";
 import { AppShell } from "@/components/app-shell";
+import { WorkspaceSettingsSwitcher } from "@/components/workspace-settings-switcher";
 import {
   getMyIssuesHref,
   getProjectHref,
@@ -39,6 +40,13 @@ export const WorkspaceAdminShell = async ({ active, children, projects, workspac
         <>
           <section className="mt-4">
             <div className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">Workspace</div>
+            <div className="mt-3">
+              <WorkspaceSettingsSwitcher
+                active={active}
+                currentWorkspaceSlug={workspace.slug}
+                workspaces={shellData.workspaces}
+              />
+            </div>
             <div className="mt-2 grid gap-1">
               <Link href={getWorkspaceHref(workspace.slug)} className={sidebarLinkStyle(false)}>
                 Overview

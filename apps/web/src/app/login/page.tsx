@@ -9,9 +9,8 @@ import { Logo } from "@/components/landing/logo";
 import { sanitizeReturnPath } from "@wevlo/auth";
 
 const errorMessages: Record<string, string> = {
-  OAuthAccountNotLinked: "이미 가입된 이메일입니다. 동일 이메일 Google 계정 연결 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
-  google_email_not_verified: "Google 계정 이메일 검증이 확인되지 않아 로그인할 수 없어요.",
-  oauth_link_conflict: "동일 이메일 계정 연결 중 충돌이 발생했어요. 기존 로그인 방식으로 먼저 로그인해 주세요."
+  OAuthAccountNotLinked: "계정 연결 처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
+  google_email_not_verified: "Google 계정 이메일 검증이 확인되지 않아 로그인할 수 없어요."
 };
 
 export default function LoginPage() {

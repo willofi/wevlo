@@ -10,6 +10,7 @@ import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { PrototypeEmptyState } from "@/components/prototype-empty-state";
 import { PrototypeShell } from "@/components/prototype-shell";
 import { getProjectHref } from "@/lib/issue-hub-data";
+import { useWorkspaceProjectsQuery } from "@/lib/query-hooks";
 
 type WorkspaceProjectsSurfaceProps = {
   projects: ProjectSummaryDto[];
@@ -31,15 +32,19 @@ export function WorkspaceProjectsSurface({
   workspaces
 }: WorkspaceProjectsSurfaceProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const projectsQuery = useWorkspaceProjectsQuery(workspace.slug, {
+    initialData: projects
+  });
+  const visibleProjects = projectsQuery.data ?? projects;
 
   return (
     <>
       <PrototypeShell
         currentWorkspaceSlug={workspace.slug}
-        projects={projects}
+        projects={visibleProjects}
         viewer={viewer}
         workspaceActionsContext={{
-          projects,
+          projects: visibleProjects,
           workspaceMembers,
           workspaceSlug: workspace.slug
         }}
@@ -59,7 +64,7 @@ export function WorkspaceProjectsSurface({
           </div>
         )}
       >
-        {projects.length === 0 ? (
+        {visibleProjects.length === 0 ? (
           <PrototypeEmptyState
             eyebrow="Workspace ready"
             title="No project yet"
@@ -68,7 +73,7 @@ export function WorkspaceProjectsSurface({
           />
         ) : (
           <div className="grid gap-3">
-            {projects.map((project) => (
+            {visibleProjects.map((project) => (
               <Link
                 key={project.id}
                 href={getProjectHref(workspace.slug, project.key)}
@@ -90,9 +95,9 @@ export function WorkspaceProjectsSurface({
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="sm" className="group-hover:bg-primary/10 group-hover:text-primary">
+                  <span className="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                     Open
-                  </Button>
+                  </span>
                 </div>
               </Link>
             ))}

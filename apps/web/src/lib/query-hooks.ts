@@ -9,7 +9,6 @@ import type {
   IssueLabelDto,
   IssueListItemDto,
   NotificationListQuery,
-  NotificationListResponseDto,
   NotificationSummaryDto,
   ProjectSummaryDto,
   WorkspaceMemberDto

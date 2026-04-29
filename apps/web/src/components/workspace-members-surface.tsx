@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 
 import type {
   WorkspaceDto,
-  WorkspaceInvitationResult,
   WorkspaceInvitationDto,
   WorkspaceMemberDto,
   WorkspaceRole
@@ -16,6 +15,7 @@ import { PageState, pageStateButtonStyle } from "@/components/page-state";
 import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import {
   createWorkspaceInvitation,
+  getWorkspaceInvitationFailureMessage,
   getInviteHref,
   getWorkspaceMemberHref,
   removeWorkspaceMember,
@@ -44,24 +44,10 @@ const roleHierarchy: Record<WorkspaceRole, number> = {
 const selectClassName =
   "flex h-10 w-full rounded-lg border border-input bg-background/70 px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring";
 
-const describeInviteFailure = (failure: WorkspaceInvitationResult): string => {
-  if (failure.reason === "invalid_email") {
-    return `${failure.email}: invalid email format`;
-  }
-  if (failure.reason === "email_send_failed") {
-    if (failure.invitationId) {
-      return `${failure.email}: invitation was created, but email delivery failed`;
-    }
-    return `${failure.email}: failed to send invitation email`;
-  }
-  if (failure.reason === "invite_create_failed") {
-    return `${failure.email}: failed to create invitation`;
-  }
-  if (failure.reason === "invite_already_pending") {
-    return `${failure.email}: invitation already pending`;
-  }
-  return `${failure.email}: unknown error`;
-};
+const canManageRole = (
+  currentUserRole: WorkspaceRole,
+  targetRole: WorkspaceRole
+): boolean => currentUserRole === "Owner" || roleHierarchy[targetRole] > roleHierarchy[currentUserRole];
 
 export const WorkspaceMembersSurface = ({
   initialInvitations,
@@ -111,20 +97,28 @@ export const WorkspaceMembersSurface = ({
       const alreadyMemberCount = results.filter((result) => result.status === "already_member").length;
       const failures = results.filter((result) => result.status === "failed");
       const failedCount = failures.length;
+      const alreadyPendingCount = failures.filter((result) => result.reason === "invite_already_pending").length;
+      const deliveryFailedCount = failures.filter((result) => result.reason === "email_send_failed").length;
 
       if (failedCount > 0) {
-        const failureSummary = failures.slice(0, 3).map(describeInviteFailure).join(" / ");
+        const failureSummary = failures.slice(0, 3).map(getWorkspaceInvitationFailureMessage).join(" / ");
         const hasMore = failures.length > 3 ? ` (+${failures.length - 3} more)` : "";
-        notifyError(new Error(`${failedCount} invitation(s) failed: ${failureSummary}${hasMore}`), "Some invitations failed.");
+        notifyError(new Error(`${failureSummary}${hasMore}`), "일부 초대 처리에 실패했어요.");
       }
 
       setEmail("");
       setRole("Member");
-      notifySuccess(`Created ${createdCount}, already members ${alreadyMemberCount}, failed ${failedCount}.`);
+      notifySuccess(
+        `초대 생성 ${createdCount}건, 이미 멤버 ${alreadyMemberCount}건, 실패 ${failedCount}건${
+          alreadyPendingCount > 0 ? ` (이미 대기 중 ${alreadyPendingCount}건 포함)` : ""
+        }${
+          deliveryFailedCount > 0 ? ` (메일 발송 실패 ${deliveryFailedCount}건 포함)` : ""
+        }.`
+      );
       setInvitations((current) => [
         ...current,
         ...results
-          .filter((result) => result.invitationId && result.status !== "already_member")
+          .filter((result) => result.invitationId && result.status !== "already_member" && result.reason !== "invite_already_pending")
           .map((result): WorkspaceInvitationDto => {
             const status: WorkspaceInvitationDto["status"] =
               result.reason === "email_send_failed" ? "delivery_failed" : "pending";
@@ -149,7 +143,7 @@ export const WorkspaceMembersSurface = ({
           })
       ]);
     } catch (inviteError) {
-      notifyError(inviteError, "Invitation failed.");
+      notifyError(inviteError, "초대 생성에 실패했어요.");
     } finally {
       setBusyAction(null);
     }
@@ -160,9 +154,9 @@ export const WorkspaceMembersSurface = ({
       setBusyAction(`resend:${invitationId}`);
       const updated = await resendWorkspaceInvitation(workspace.slug, invitationId);
       setInvitations((current) => current.map((item) => (item.id === invitationId ? updated : item)));
-      notifySuccess("Invitation resent.");
+      notifySuccess("초대 메일을 다시 보냈어요.");
     } catch (resendError) {
-      notifyError(resendError, "Invitation resend failed.");
+      notifyError(resendError, "초대 재전송에 실패했어요.");
     } finally {
       setBusyAction(null);
     }
@@ -184,9 +178,9 @@ export const WorkspaceMembersSurface = ({
             : item
         )
       );
-      notifySuccess("Invitation canceled.");
+      notifySuccess("초대를 취소했어요.");
     } catch (revokeError) {
-      notifyError(revokeError, "Invitation cancel failed.");
+      notifyError(revokeError, "초대 취소에 실패했어요.");
     } finally {
       setBusyAction(null);
     }
@@ -197,16 +191,16 @@ export const WorkspaceMembersSurface = ({
       setBusyAction(`role:${userId}`);
       const updatedMember = await updateWorkspaceMember(workspace.slug, userId, { role: newRole });
       setMembers((current) => current.map((m) => (m.userId === userId ? updatedMember : m)));
-      notifySuccess("Member role updated.");
+      notifySuccess("멤버 권한을 변경했어요.");
     } catch (updateError) {
-      notifyError(updateError, "Role update failed.");
+      notifyError(updateError, "권한 변경에 실패했어요.");
     } finally {
       setBusyAction(null);
     }
   };
 
   const handleRemoveMember = async (userId: string) => {
-    if (!confirm("Are you sure you want to remove this member from the workspace?")) {
+    if (!confirm("이 멤버를 워크스페이스에서 내보낼까요?")) {
       return;
     }
 
@@ -214,9 +208,9 @@ export const WorkspaceMembersSurface = ({
       setBusyAction(`remove:${userId}`);
       await removeWorkspaceMember(workspace.slug, userId);
       setMembers((current) => current.filter((m) => m.userId !== userId));
-      notifySuccess("Member removed.");
+      notifySuccess("워크스페이스에서 멤버를 내보냈어요.");
     } catch (removeError) {
-      notifyError(removeError, "Member removal failed.");
+      notifyError(removeError, "멤버 내보내기에 실패했어요.");
     } finally {
       setBusyAction(null);
     }
@@ -228,9 +222,9 @@ export const WorkspaceMembersSurface = ({
         <Card id="invite-form" className="bg-card/85">
           <CardHeader>
             <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Invite teammate</div>
-            <CardTitle>Workspace roster</CardTitle>
+            <CardTitle>워크스페이스 초대</CardTitle>
             <CardDescription>
-              Invite collaborators into {workspace.name} before granting project-specific access.
+              프로젝트 권한을 주기 전에 먼저 {workspace.name} 워크스페이스에 멤버를 초대하세요.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -255,27 +249,40 @@ export const WorkspaceMembersSurface = ({
               })}
             </select>
             <Button type="button" onClick={handleInvite} disabled={isBusy || email.length === 0}>
-              {busyAction === "invite" ? "Sending invite..." : "Send invitation"}
+              {busyAction === "invite" ? "초대 보내는 중..." : "초대 보내기"}
             </Button>
           </CardContent>
         </Card>
       )}
 
+      {!canInvite ? (
+        <Card className="bg-card/85">
+          <CardHeader>
+            <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Workspace permissions</div>
+            <CardTitle>읽기 전용 멤버 보기</CardTitle>
+            <CardDescription>
+              현재 권한은 <span className="font-semibold text-foreground">{currentUserRole}</span> 입니다. 멤버와 권한은 볼 수 있지만,
+              초대, 권한 변경, 멤버 내보내기는 Owner 또는 Maintainer만 할 수 있어요.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
+
       <Card className={cn("bg-card/85", !canInvite && "lg:col-span-2")}>
         <CardHeader>
           <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Workspace members</div>
-          <CardTitle>{members.length} active member{members.length === 1 ? "" : "s"}</CardTitle>
+          <CardTitle>활성 멤버 {members.length}명</CardTitle>
         </CardHeader>
         <CardContent>
           {members.length === 0 ? (
             <PageState
               eyebrow="No members yet"
-              title="Invite the first teammate"
-              body="This workspace is empty for now. Send an invite so the team can start collaborating."
+              title="첫 멤버를 초대해 보세요"
+              body="아직 이 워크스페이스에 멤버가 없어요. 팀이 함께 작업할 수 있도록 초대를 보내세요."
               actions={
                 isOwner ? (
                   <a href="#invite-form" style={pageStateButtonStyle}>
-                    Invite someone
+                    멤버 초대
                   </a>
                 ) : undefined
               }
@@ -295,15 +302,13 @@ export const WorkspaceMembersSurface = ({
                   </div>
                   <div className="flex items-center gap-2">
                     {member.userId !== currentUser.id ? (
+                      canInvite && canManageRole(currentUserRole, member.role) ? (
                       <>
                         <select
                           value={member.role}
                           onChange={(e) => void handleUpdateRole(member.userId, e.target.value as WorkspaceRole)}
                           className={cn(selectClassName, "h-8 w-32 text-[11px] py-0")}
-                          disabled={
-                            isBusy ||
-                            (!isOwner && roleHierarchy[member.role] <= roleHierarchy[currentUserRole])
-                          }
+                          disabled={isBusy}
                         >
                           {workspaceRoles.map((r) => {
                             const isDisabled = !isOwner && roleHierarchy[r] <= roleHierarchy[currentUserRole];
@@ -319,17 +324,19 @@ export const WorkspaceMembersSurface = ({
                           size="sm"
                           className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10"
                           onClick={() => void handleRemoveMember(member.userId)}
-                          disabled={
-                            isBusy ||
-                            (!isOwner && roleHierarchy[member.role] <= roleHierarchy[currentUserRole])
-                          }
+                          disabled={isBusy}
                         >
-                          Remove
+                          내보내기
                         </Button>
                       </>
+                      ) : (
+                        <div className="shrink-0 rounded-full border border-border/70 bg-secondary/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground">
+                          {member.role}
+                        </div>
+                      )
                     ) : (
                       <div className="shrink-0 rounded-full border border-border/70 bg-secondary/40 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-foreground">
-                        {member.role} (You)
+                        {member.role} (나)
                       </div>
                     )}
                   </div>
@@ -343,14 +350,14 @@ export const WorkspaceMembersSurface = ({
       <Card className="bg-card/85">
         <CardHeader>
           <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Invitations</div>
-          <CardTitle>{pendingInvitations.length} waiting</CardTitle>
+          <CardTitle>대기 중 초대 {pendingInvitations.length}건</CardTitle>
         </CardHeader>
         <CardContent>
           {pendingInvitations.length === 0 ? (
             <PageState
               eyebrow="Nothing pending"
-              title="No outstanding invitations"
-              body="Once you send an invite, it will appear here with the acceptance link and expiry date."
+              title="대기 중인 초대가 없어요"
+              body="초대를 보내면 수락 링크와 만료일이 여기에 표시돼요."
             />
           ) : (
             <div className="grid gap-3">
@@ -365,15 +372,19 @@ export const WorkspaceMembersSurface = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button asChild variant="outline" size="sm">
-                      <a href={getInviteHref(invitation.acceptToken ?? invitation.id)}>Open invite</a>
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" disabled={isBusy} onClick={() => void handleResendInvitation(invitation.id)}>
-                      {busyAction === `resend:${invitation.id}` ? "Resending..." : "Resend"}
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" disabled={isBusy} onClick={() => void handleRevokeInvitation(invitation.id)}>
-                      {busyAction === `revoke:${invitation.id}` ? "Canceling..." : "Cancel"}
-                    </Button>
+                    {canInvite ? (
+                      <>
+                        <Button asChild variant="outline" size="sm">
+                          <a href={getInviteHref(invitation.acceptToken ?? invitation.id)}>초대 열기</a>
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" disabled={isBusy} onClick={() => void handleResendInvitation(invitation.id)}>
+                          {busyAction === `resend:${invitation.id}` ? "재전송 중..." : "재전송"}
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" disabled={isBusy} onClick={() => void handleRevokeInvitation(invitation.id)}>
+                          {busyAction === `revoke:${invitation.id}` ? "취소 중..." : "취소"}
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -385,14 +396,14 @@ export const WorkspaceMembersSurface = ({
       <Card className="bg-card/85 lg:col-span-2">
         <CardHeader>
           <div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">History</div>
-          <CardTitle>Recent invitation activity</CardTitle>
+          <CardTitle>최근 초대 이력</CardTitle>
         </CardHeader>
         <CardContent>
           {completedInvitations.length === 0 ? (
             <PageState
               eyebrow="No history yet"
-              title="Accepted or revoked invites will show here"
-              body="This is where you can confirm who joined and which invitations expired or were revoked."
+              title="아직 초대 이력이 없어요"
+              body="수락되었거나 취소된 초대는 여기서 확인할 수 있어요."
             />
           ) : (
             <div className="grid gap-3">

@@ -14,23 +14,7 @@ import {
 } from "@wevlo/ui-web";
 import { createWorkspaceInvitation } from "@/lib/issue-hub-data";
 import { notifyError, notifySuccess } from "@/lib/action-feedback";
-import type { WorkspaceInvitationResult } from "@wevlo/contracts";
-
-const describeInviteFailure = (failure: WorkspaceInvitationResult): string => {
-  if (failure.reason === "invalid_email") {
-    return `${failure.email}: invalid email format`;
-  }
-  if (failure.reason === "email_send_failed") {
-    if (failure.invitationId) {
-      return `${failure.email}: invitation was created, but email delivery failed`;
-    }
-    return `${failure.email}: failed to send invitation email`;
-  }
-  if (failure.reason === "invite_create_failed") {
-    return `${failure.email}: failed to create invitation`;
-  }
-  return `${failure.email}: unknown error`;
-};
+import { getWorkspaceInvitationFailureMessage } from "@/lib/issue-hub-data";
 
 export function InviteMemberDialog({
   workspaceSlug,
@@ -63,7 +47,7 @@ export function InviteMemberDialog({
       const failures = results.filter((result) => result.status === "failed");
 
       if (failures.length === 0) {
-        notifySuccess("Invitations sent.");
+        notifySuccess("초대를 보냈어요.");
         setSuccess(true);
         setTimeout(() => {
           onOpenChange(false);
@@ -71,17 +55,17 @@ export function InviteMemberDialog({
           setEmailInput("");
         }, 1500);
       } else {
-        const failureSummary = failures.slice(0, 3).map(describeInviteFailure).join(" / ");
+        const failureSummary = failures.slice(0, 3).map(getWorkspaceInvitationFailureMessage).join(" / ");
         const hasMore = failures.length > 3 ? ` (+${failures.length - 3} more)` : "";
-        notifyError(new Error(`${failures.length} invitation(s) failed: ${failureSummary}${hasMore}`), "Invitation failed.");
+        notifyError(new Error(`${failureSummary}${hasMore}`), "일부 초대 처리에 실패했어요.");
         if (failures.length < results.length) {
-          notifySuccess("Some invitations were sent.");
+          notifySuccess("일부 초대는 정상적으로 보냈어요.");
           setSuccess(true);
           setTimeout(() => setSuccess(false), 2000);
         }
       }
     } catch (inviteError) {
-      notifyError(inviteError, "Invitation failed.");
+      notifyError(inviteError, "초대 생성에 실패했어요.");
     } finally {
       setIsSaving(false);
     }
@@ -93,7 +77,7 @@ export function InviteMemberDialog({
         <DialogHeader>
           <DialogTitle className="text-xl font-bold tracking-tight">Invite to your workspace</DialogTitle>
           <DialogDescription>
-            Enter email addresses separated by commas to bring teammates into this workspace.
+            쉼표로 구분한 이메일 주소를 입력해 워크스페이스에 팀원을 초대하세요.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleInvite} className="grid gap-4 py-4">
@@ -113,17 +97,17 @@ export function InviteMemberDialog({
             />
           </div>
           <div className="text-[11px] text-muted-foreground/60 italic">
-            New members will be invited with the "Member" role by default. Roles can be changed later in workspace settings.
+            새 멤버는 기본적으로 "Member" 권한으로 초대되며, 이후 워크스페이스 설정에서 변경할 수 있어요.
           </div>
           <DialogFooter className="mt-4">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isSaving || success}>
-              Cancel
+              취소
             </Button>
             <Button type="submit" disabled={isSaving || success || !emailInput.trim()} className="min-w-32 rounded-xl">
-              {isSaving ? "Sending..." : success ? (
-                "Sent!"
+              {isSaving ? "보내는 중..." : success ? (
+                "완료!"
               ) : (
-                "Send invites"
+                "초대 보내기"
               )}
             </Button>
           </DialogFooter>

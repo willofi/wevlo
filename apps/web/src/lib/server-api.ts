@@ -22,6 +22,7 @@ import { redirect } from "next/navigation";
 import { buildApiV1Url } from "@/lib/api-paths";
 import { requireCurrentAuthSession } from "@/lib/auth-server";
 import { buildApiInternalAuthHeaders } from "@/lib/internal-auth-headers";
+import { buildApiRequestError } from "@/lib/request-error";
 import { getInternalAuthToken, getWebApiBaseUrl } from "@/lib/env";
 
 const apiBaseUrl = getWebApiBaseUrl();
@@ -62,8 +63,7 @@ const requestJson = async <TResponse>(
   }
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Request failed: ${response.status} ${message}`);
+    throw await buildApiRequestError(response);
   }
 
   return (await response.json()) as TResponse;

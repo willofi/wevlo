@@ -152,7 +152,15 @@ export function CreateIssueDialog({
   }, [open, selectedProjectKey, workspaceSlug]);
 
   useEffect(() => {
-    setSelectedLabelIds((current) => current.filter((labelId) => labels.some((label) => label.id === labelId)));
+    setSelectedLabelIds((current) => {
+      const next = current.filter((labelId) => labels.some((label) => label.id === labelId));
+
+      if (next.length === current.length && next.every((labelId, index) => labelId === current[index])) {
+        return current;
+      }
+
+      return next;
+    });
   }, [labels]);
 
   const selectedProject = projects.find((project) => project.key === selectedProjectKey);

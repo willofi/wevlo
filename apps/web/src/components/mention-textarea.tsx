@@ -4,6 +4,7 @@ import { forwardRef, useImperativeHandle, useRef, useState, type FocusEvent, typ
 
 import type { WorkspaceMemberDto } from "@wevlo/contracts";
 import { cn } from "@wevlo/ui-web";
+import { getWorkspaceMemberMentionLabel } from "@/lib/mention-label";
 
 type MentionTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "value"> & {
   onValueChange: (value: string) => void;
@@ -169,13 +170,12 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
                   insertMention(member.user.handle);
                 }}
                 className={cn(
-                  "flex w-full items-center justify-between rounded-md px-3 py-2 text-left transition-colors",
+                  "flex w-full items-center rounded-md px-3 py-2 text-left transition-colors",
                   index === activeIndex ? "bg-secondary" : "hover:bg-secondary/70"
                 )}
               >
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-foreground">{member.user.name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">@{member.user.handle}</span>
+                <span className="block truncate text-sm font-medium text-foreground">
+                  {getWorkspaceMemberMentionLabel(member)}
                 </span>
               </button>
             ))}

@@ -38,6 +38,7 @@ import type {
   UpdateIssueSubscriptionRequest,
   UpdateIssueRequest,
   WorkspaceDto,
+  WorkspaceInvitationFailureReason,
   WorkspaceInvitationDto,
   WorkspaceInvitationResult,
   WorkspaceMemberDto,
@@ -50,6 +51,7 @@ import {
   type DemoUser
 } from "@wevlo/auth";
 import { buildBffApiPath } from "./api-paths";
+import { buildApiRequestError } from "./request-error";
 
 const resourceReadAttempts = 5;
 const resourceReadDelayMs = 120;
@@ -85,8 +87,7 @@ const requestJson = async <TResponse>(
   }
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Request failed: ${response.status} ${message}`);
+    throw await buildApiRequestError(response);
   }
 
   return (await response.json()) as TResponse;
@@ -1088,6 +1089,30 @@ export const getUserRole = (userId: string | null | undefined): string => {
   return findDemoUser(userId)?.role ?? "Member";
 };
 
+export const getWorkspaceInvitationFailureMessage = (
+  failure: WorkspaceInvitationResult
+): string => {
+  const reason = failure.reason as WorkspaceInvitationFailureReason | null;
+
+  if (reason === "invalid_email") {
+    return `${failure.email}: 올바른 이메일 형식이 아니에요.`;
+  }
+
+  if (reason === "email_send_failed") {
+    return `${failure.email}: 초대는 생성됐지만 이메일 발송에 실패했어요.`;
+  }
+
+  if (reason === "invite_already_pending") {
+    return `${failure.email}: 이미 대기 중인 초대가 있어요.`;
+  }
+
+  if (reason === "invite_create_failed") {
+    return `${failure.email}: 초대를 생성하지 못했어요.`;
+  }
+
+  return `${failure.email}: 알 수 없는 오류가 발생했어요.`;
+};
+
 export const buildProjectShellHref = (
   workspaceSlug: string,
   projectKey: string,
@@ -1190,7 +1215,8 @@ export const getInboxHref = (options?: {
 
 export const getWorkspaceHref = (workspaceSlug: string): string => `/${workspaceSlug}`;
 
-export const getWorkspaceMembersHref = (workspaceSlug: string): string => `/${workspaceSlug}/settings/members`;
+export const getWorkspaceMembersHref = (workspaceSlug: string): string =>
+  `/settings?section=workspace&workspaceSlug=${encodeURIComponent(workspaceSlug)}`;
 
 export const getWorkspaceMemberHref = (workspaceSlug: string, userId: string): string =>
   `/${workspaceSlug}/members/${encodeURIComponent(userId)}`;

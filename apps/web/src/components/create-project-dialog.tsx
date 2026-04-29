@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import type { ProjectSummaryDto } from "@wevlo/contracts";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
@@ -18,6 +20,7 @@ import {
 import { buildProjectKeyCandidatesClient, normalizeProjectKeyClient } from "@/lib/client-slug";
 import { notifyError, notifySuccess } from "@/lib/action-feedback";
 import { createProject, getProjectHref, waitForProjectRead } from "@/lib/issue-hub-data";
+import { queryKeys } from "@/lib/query-keys";
 
 type CreateProjectDialogProps = {
   open: boolean;
@@ -31,6 +34,7 @@ export function CreateProjectDialog({
   workspaceSlug
 }: CreateProjectDialogProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [keyOverride, setKeyOverride] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -68,10 +72,20 @@ export function CreateProjectDialog({
           });
 
           await waitForProjectRead(workspaceSlug, project.key);
+          queryClient.setQueryData<ProjectSummaryDto[] | undefined>(
+            queryKeys.workspace.projects(workspaceSlug),
+            (current) => {
+              const projects = current ?? [];
+              const withoutDuplicate = projects.filter((candidate) => candidate.id !== project.id);
+              return [...withoutDuplicate, project].sort((left, right) => left.name.localeCompare(right.name));
+            }
+          );
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.workspace.projects(workspaceSlug)
+          });
           notifySuccess("Project created.");
           handleOpenChange(false);
           router.push(getProjectHref(workspaceSlug, project.key));
-          router.refresh();
         } catch (submitError) {
           notifyError(submitError, "Project creation failed.");
         }
