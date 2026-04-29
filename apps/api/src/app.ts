@@ -29,9 +29,52 @@ export type ApiDependencies = {
   database: Database;
 };
 
+const DEFAULT_HTTP_LOG_MIN_MS = 300;
+
+const resolveHttpLogMinMs = (): number => {
+  const raw = process.env.WEVLO_HTTP_LOG_MIN_MS;
+  if (!raw) {
+    return DEFAULT_HTTP_LOG_MIN_MS;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_HTTP_LOG_MIN_MS;
+  }
+
+  return parsed;
+};
+
 export const buildApi = ({ database }: ApiDependencies) => {
+  const httpLogMinMs = resolveHttpLogMinMs();
   const app = Fastify({
     logger: true
+  });
+
+  app.addHook("onRequest", async (request) => {
+    (request as any).__perfStartNs = process.hrtime.bigint();
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    const startNs = (request as any).__perfStartNs;
+    if (typeof startNs !== "bigint") {
+      return;
+    }
+
+    const durationMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
+    if (durationMs < httpLogMinMs) {
+      return;
+    }
+
+    request.log.warn({
+      tag: "perf.http.slow",
+      method: request.method,
+      url: request.url,
+      route: request.routeOptions.url,
+      statusCode: reply.statusCode,
+      durationMs: Number(durationMs.toFixed(1)),
+      thresholdMs: httpLogMinMs
+    }, "Slow request detected");
   });
 
   // 1. Register Core Plugins

@@ -5,10 +5,33 @@ import { getDatabaseUrl } from "./config";
 import type { DatabaseSchema } from "./schema";
 
 const { Pool } = pg;
+const DEFAULT_DB_QUERY_LOG_MIN_MS = 200;
 
 export type Database = Kysely<DatabaseSchema>;
 export type DatabaseTransaction = Transaction<DatabaseSchema>;
 export type DatabaseExecutor = Database | DatabaseTransaction;
+
+const resolveDbQueryLogMinMs = (): number => {
+  const raw = process.env.WEVLO_DB_QUERY_LOG_MIN_MS;
+  if (!raw) {
+    return DEFAULT_DB_QUERY_LOG_MIN_MS;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_DB_QUERY_LOG_MIN_MS;
+  }
+
+  return parsed;
+};
+
+const truncateSql = (sqlText: string, maxLength = 300): string => {
+  if (sqlText.length <= maxLength) {
+    return sqlText;
+  }
+
+  return `${sqlText.slice(0, maxLength)}...`;
+};
 
 const normalizeConnectionString = (connectionString: string): string => {
   try {
@@ -44,6 +67,7 @@ const resolveSslConfig = (connectionString: string): pg.PoolConfig["ssl"] | unde
 
 export const createDatabase = (connectionString = getDatabaseUrl()): Database => {
   const normalizedConnectionString = normalizeConnectionString(connectionString);
+  const dbQueryLogMinMs = resolveDbQueryLogMinMs();
 
   return new Kysely<DatabaseSchema>({
     dialect: new PostgresDialect({
@@ -51,7 +75,25 @@ export const createDatabase = (connectionString = getDatabaseUrl()): Database =>
         connectionString: normalizedConnectionString,
         ssl: resolveSslConfig(normalizedConnectionString)
       }) as never
-    })
+    }),
+    log: (event) => {
+      if (event.level === "query" && event.queryDurationMillis >= dbQueryLogMinMs) {
+        console.info("[perf][db.query]", JSON.stringify({
+          durationMs: Number(event.queryDurationMillis.toFixed(1)),
+          thresholdMs: dbQueryLogMinMs,
+          sql: truncateSql(event.query.sql),
+          paramsCount: event.query.parameters.length
+        }));
+      }
+
+      if (event.level === "error") {
+        console.error("[perf][db.error]", JSON.stringify({
+          error: event.error instanceof Error ? event.error.message : String(event.error),
+          sql: truncateSql(event.query.sql),
+          paramsCount: event.query.parameters.length
+        }));
+      }
+    }
   });
 };
 
