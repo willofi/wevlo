@@ -52,9 +52,11 @@ const toReadableStream = async (body: unknown): Promise<NodeJS.ReadableStream> =
 export class SupabaseS3AttachmentStorage implements AttachmentStorage {
   private readonly bucket: string;
   private readonly client: S3Client;
+  private readonly publicBaseUrl: string;
 
   constructor(options: SupabaseS3AttachmentStorageOptions) {
     this.bucket = options.bucket;
+    this.publicBaseUrl = `${new URL(options.endpoint).origin}/storage/v1/object/public/${this.bucket}`;
     this.client = new S3Client({
       credentials: {
         accessKeyId: options.accessKeyId,
@@ -88,6 +90,15 @@ export class SupabaseS3AttachmentStorage implements AttachmentStorage {
       checksum,
       storageKey
     };
+  }
+
+  publicUrlFor(storageKey: string): string | null {
+    const encodedStorageKey = storageKey
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+
+    return `${this.publicBaseUrl}/${encodedStorageKey}`;
   }
 
   async stream(storageKey: string): Promise<NodeJS.ReadableStream> {

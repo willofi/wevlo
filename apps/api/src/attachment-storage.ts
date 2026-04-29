@@ -17,6 +17,7 @@ export type AttachmentStorage = {
     contentType: string;
     keyPrefix?: string;
   }) => Promise<StoredAttachment>;
+  publicUrlFor?: (storageKey: string) => string | null;
   stream: (storageKey: string) => Promise<NodeJS.ReadableStream>;
   delete: (storageKey: string) => Promise<void>;
 };
@@ -42,6 +43,10 @@ export class LocalAttachmentStorage implements AttachmentStorage {
       checksum,
       storageKey
     };
+  }
+
+  publicUrlFor(): string | null {
+    return null;
   }
 
   async stream(storageKey: string): Promise<NodeJS.ReadableStream> {

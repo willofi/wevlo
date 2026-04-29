@@ -19,6 +19,42 @@ import {
   revokeWorkspaceInvitation
 } from "../domain/workspace-invitation";
 
+const normalizeSupabasePublicStorageBaseUrl = (): string | null => {
+  const driver = process.env.WEVLO_STORAGE_DRIVER?.trim();
+  const endpoint = process.env.WEVLO_S3_ENDPOINT?.trim();
+  const bucket = process.env.WEVLO_S3_BUCKET?.trim();
+
+  if (driver !== "supabase_s3" || !endpoint || !bucket) {
+    return null;
+  }
+
+  try {
+    const url = new URL(endpoint);
+    return `${url.origin}/storage/v1/object/public/${bucket}`;
+  } catch {
+    return null;
+  }
+};
+
+const encodeStorageKey = (storageKey: string): string =>
+  storageKey
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+const resolveAvatarUrl = (input: {
+  avatarStorageKey: string | null;
+  avatarUrl: string | null;
+}): string | null => {
+  const publicBaseUrl = normalizeSupabasePublicStorageBaseUrl();
+
+  if (publicBaseUrl && input.avatarStorageKey) {
+    return `${publicBaseUrl}/${encodeStorageKey(input.avatarStorageKey)}`;
+  }
+
+  return input.avatarUrl;
+};
+
 const mapUserRow = (row: {
   avatar_content_type: string | null;
   avatar_storage_key: string | null;
@@ -32,7 +68,10 @@ const mapUserRow = (row: {
 }): Omit<User, "identities"> => ({
   avatarContentType: row.avatar_content_type,
   avatarStorageKey: row.avatar_storage_key,
-  avatarUrl: row.avatar_url,
+  avatarUrl: resolveAvatarUrl({
+    avatarStorageKey: row.avatar_storage_key,
+    avatarUrl: row.avatar_url
+  }),
   createdAt: row.created_at,
   email: row.email,
   handle: row.handle,
@@ -57,28 +96,52 @@ const mapIdentityRow = (row: {
   userId: row.user_id
 });
 
-const hydrateUser = async (database: DatabaseExecutor, userId: string): Promise<User | null> => {
-  const userRow = await database
-    .selectFrom("users")
-    .selectAll()
-    .where("id", "=", userId)
-    .executeTakeFirst();
+const hydrateUsersByIds = async (
+  database: DatabaseExecutor,
+  userIds: string[]
+): Promise<Map<string, User>> => {
+  const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
 
-  if (!userRow) {
-    return null;
+  if (uniqueUserIds.length === 0) {
+    return new Map();
   }
 
-  const identityRows = await database
-    .selectFrom("user_identities")
-    .selectAll()
-    .where("user_id", "=", userId)
-    .orderBy("created_at", "asc")
-    .execute();
+  const [userRows, identityRows] = await Promise.all([
+    database
+      .selectFrom("users")
+      .selectAll()
+      .where("id", "in", uniqueUserIds)
+      .execute(),
+    database
+      .selectFrom("user_identities")
+      .selectAll()
+      .where("user_id", "in", uniqueUserIds)
+      .orderBy("created_at", "asc")
+      .execute()
+  ]);
 
-  return {
-    ...mapUserRow(userRow),
-    identities: identityRows.map(mapIdentityRow)
-  };
+  const identitiesByUserId = new Map<string, UserDto["identities"]>();
+
+  for (const identityRow of identityRows) {
+    const current = identitiesByUserId.get(identityRow.user_id) ?? [];
+    current.push(mapIdentityRow(identityRow));
+    identitiesByUserId.set(identityRow.user_id, current);
+  }
+
+  return new Map(
+    userRows.map((userRow) => [
+      userRow.id,
+      {
+        ...mapUserRow(userRow),
+        identities: identitiesByUserId.get(userRow.id) ?? []
+      }
+    ])
+  );
+};
+
+const hydrateUser = async (database: DatabaseExecutor, userId: string): Promise<User | null> => {
+  const usersById = await hydrateUsersByIds(database, [userId]);
+  return usersById.get(userId) ?? null;
 };
 
 const mapWorkspaceInvitationRow = (row: {
@@ -398,25 +461,25 @@ export class PostgresIdentityRepository {
       .orderBy("created_at", "asc")
       .execute();
 
-    const members = await Promise.all(
-      rows.map(async (row) => {
-        const user = await hydrateUser(this.database, row.user_id);
+    const usersById = await hydrateUsersByIds(this.database, rows.map((row) => row.user_id));
 
-        if (!user) {
-          return null;
-        }
+    return rows.flatMap((row) => {
+      const user = usersById.get(row.user_id);
 
-        return {
+      if (!user) {
+        return [];
+      }
+
+      return [
+        {
           createdAt: row.created_at,
           role: row.role,
           user,
           userId: row.user_id,
           workspaceId: row.workspace_id
-        };
-      })
-    );
-
-    return members.filter((member): member is NonNullable<typeof member> => member !== null);
+        }
+      ];
+    });
   }
 
   async listMembershipsForUser(userId: string): Promise<WorkspaceMemberDto[]> {

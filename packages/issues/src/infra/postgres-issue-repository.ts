@@ -349,48 +349,7 @@ export class PostgresIssueRepository implements IssueRepository {
       .orderBy("issue_number", "asc")
       .execute();
 
-    if (rows.length === 0) {
-      return [];
-    }
-
-    const issueIds = rows.map((row) => row.id);
-    const [labelRows, sourceLinkRows] = await Promise.all([
-      this.database
-        .selectFrom("issue_label_assignments")
-        .innerJoin("project_issue_labels", "project_issue_labels.id", "issue_label_assignments.label_id")
-        .select([
-          "issue_label_assignments.issue_id as issue_id",
-          "project_issue_labels.id as id",
-          "project_issue_labels.project_id as project_id",
-          "project_issue_labels.name as name",
-          "project_issue_labels.color as color",
-          "project_issue_labels.created_at as created_at",
-          "project_issue_labels.updated_at as updated_at"
-        ])
-        .where("issue_label_assignments.issue_id", "in", issueIds)
-        .orderBy("project_issue_labels.name", "asc")
-        .execute(),
-      this.database
-        .selectFrom("issue_source_links")
-        .selectAll()
-        .where("issue_id", "in", issueIds)
-        .orderBy("created_at", "asc")
-        .execute()
-    ]);
-
-    const labelsByIssueId = this.groupLabelsByIssueId(labelRows as Array<LabelRow & { issue_id: string }>);
-    const sourceLinksByIssueId = this.groupSourceLinksByIssueId(sourceLinkRows);
-
-    return rows.map((row) => ({
-      ...buildIssueListItem(row, labelsByIssueId.get(row.id) ?? [], sourceLinksByIssueId.get(row.id) ?? []),
-      attachments: [],
-      comments: [],
-      description: row.description,
-      descriptionMentions: [],
-      parent: null,
-      reactions: [],
-      subIssues: []
-    }));
+    return this.hydrateIssues(rows);
   }
 
   async listIssueSummariesByProject(input: {

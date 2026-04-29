@@ -80,7 +80,7 @@ export function IssueListTable({
   workspaceSlugByProjectId = {}
 }: IssueListTableProps) {
   const router = useRouter();
-  const [localIssues, setLocalIssues] = useState(issues);
+  const [localIssues, setLocalIssues] = useState<IssueDetailDto[]>(issues);
   const [collapsedStates, setCollapsedStates] = useState<Record<IssueDetailDto["state"], boolean>>({
     backlog: false,
     todo: false,
@@ -423,8 +423,8 @@ export function IssueListTable({
                         className="flex items-center justify-center"
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
-                      >
-                        <DropdownMenu>
+                        >
+                          <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
                               type="button"
@@ -527,14 +527,14 @@ export function IssueListTable({
                                 type="button"
                                 className={cn(
                                   "flex items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-secondary/70",
-                                  issue.labels.length === 0 && "text-muted-foreground/40 hover:text-muted-foreground",
+                                  (issue.labels ?? []).length === 0 && "text-muted-foreground/40 hover:text-muted-foreground",
                                   busyLabelsIssueId === issue.id && "opacity-60"
                                 )}
-                                disabled={!projectKey || busyLabelsIssueId === issue.id}
-                              >
-                                {issue.labels.length > 0 ? (
+                              disabled={!projectKey || busyLabelsIssueId === issue.id}
+                            >
+                                {(issue.labels ?? []).length > 0 ? (
                                   <div className="inline-flex items-center gap-1.5">
-                                    {issue.labels.map((label) => (
+                                    {(issue.labels ?? []).map((label) => (
                                       <span
                                         key={label.id}
                                         className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground"
@@ -569,12 +569,12 @@ export function IssueListTable({
                                 return filtered.map((label) => (
                                   <DropdownMenuCheckboxItem
                                     key={label.id}
-                                    checked={issue.labels.some((current) => current.id === label.id)}
+                                    checked={(issue.labels ?? []).some((current) => current.id === label.id)}
                                     onCheckedChange={(checked) => {
                                       if (!projectKey) return;
                                       const nextLabelIds = checked
-                                        ? [...new Set([...issue.labels.map((l) => l.id), label.id])]
-                                        : issue.labels.map((l) => l.id).filter((id) => id !== label.id);
+                                        ? [...new Set([...(issue.labels ?? []).map((l) => l.id), label.id])]
+                                        : (issue.labels ?? []).map((l) => l.id).filter((id) => id !== label.id);
                                       void handleLabelChange(issue, nextLabelIds, rowWorkspaceSlug, projectKey);
                                     }}
                                   >

@@ -36,8 +36,10 @@ const meRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get("/me", async (request, reply) => {
     const currentUser = await fastify.resolveCurrentUser(request);
-    const workspaceMemberships = await fastify.identityRepository.listMembershipsForUser(currentUser.id);
-    const projectMemberships = await fastify.projectCollaborationRepository.listMembershipsForUser(currentUser.id);
+    const [workspaceMemberships, projectMemberships] = await Promise.all([
+      fastify.identityRepository.listMembershipsForUser(currentUser.id),
+      fastify.projectCollaborationRepository.listMembershipsForUser(currentUser.id)
+    ]);
 
     return reply.send(
       meSchema.parse({
@@ -116,10 +118,11 @@ const meRoutes: FastifyPluginAsync = async (fastify) => {
     const previousStorageKey = currentUser.avatarStorageKey;
 
     try {
+      const directAvatarUrl = fastify.attachmentStorage.publicUrlFor?.(stored.storageKey) ?? buildProfileAvatarUrl(currentUser.id);
       const updatedUser = await fastify.identityRepository.updateProfile({
         avatarContentType: contentType,
         avatarStorageKey: stored.storageKey,
-        avatarUrl: buildProfileAvatarUrl(currentUser.id),
+        avatarUrl: directAvatarUrl,
         userId: currentUser.id
       });
 
@@ -164,6 +167,8 @@ const meRoutes: FastifyPluginAsync = async (fastify) => {
     if (user.avatarContentType) {
       reply.header("content-type", user.avatarContentType);
     }
+
+    reply.header("cache-control", "public, max-age=300, s-maxage=300, stale-while-revalidate=86400");
 
     const avatarStream = await fastify.attachmentStorage.stream(user.avatarStorageKey);
     return reply.send(avatarStream);

@@ -2,6 +2,7 @@ import type {
   IntegrationInstallationDto,
   IntegrationProjectLinkDto,
   IssueDetailDto,
+  IssueListItemDto,
   WorkspaceSearchQuery,
   WorkspaceSearchResponseDto,
   MeDto,
@@ -170,9 +171,9 @@ const listProjectIssueSummaries = async (
   workspaceSlug: string,
   projectKey: string,
   scope: "all" | "assigned" | "created" = "all"
-): Promise<IssueDetailDto[]> => {
-  const issues = await requestJson<IssueDetailDto[]>(
-    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues?scope=${scope}`
+): Promise<IssueListItemDto[]> => {
+  const issues = await requestJson<IssueListItemDto[]>(
+    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues/summary?scope=${scope}`
   );
 
   return issues ?? [];
@@ -183,12 +184,10 @@ export const getIssuesForProject = async (
   projectKey: string,
   scope: "all" | "assigned" | "created" = "all"
 ): Promise<IssueDetailDto[]> => {
-  const issues = await listProjectIssueSummaries(workspaceSlug, projectKey, scope);
-  const details = await Promise.all(
-    issues.map(async (issue) => getIssueByKey(workspaceSlug, projectKey, issue.issueKey))
+  const issues = await requestJson<IssueDetailDto[]>(
+    `/workspaces/${workspaceSlug}/projects/${projectKey}/issues?scope=${scope}`
   );
-
-  return details.filter((issue): issue is IssueDetailDto => Boolean(issue));
+  return issues ?? [];
 };
 
 export const getWorkspaceInvitationByToken = async (

@@ -115,6 +115,31 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "project.forbidden", "Project access denied");
     }
 
+    const issues = await fastify.issueRepository.listByProject(project.id);
+    return reply.send(fastify.filterIssuesByScope(issues, userId, query.scope ?? "all"));
+  });
+
+  fastify.get("/workspaces/:workspaceSlug/projects/:projectKey/issues/summary", async (request, reply) => {
+    const params = request.params as {
+      projectKey: string;
+      workspaceSlug: string;
+    };
+    const query = listIssuesQuerySchema.parse(request.query);
+    const userId = (await fastify.resolveCurrentUser(request)).id;
+    const { project, workspace } = await fastify.resolveProjectAccess(userId, params);
+
+    if (!workspace) {
+      return sendError(reply, 404, "workspace.not_found", "Workspace not found");
+    }
+
+    if (!project) {
+      return sendError(reply, 404, "project.not_found", "Project not found");
+    }
+
+    if (!can(project.currentUserRole, "project.view")) {
+      return sendError(reply, 403, "project.forbidden", "Project access denied");
+    }
+
     const issues = await listIssuesUseCase(fastify.issueRepository, {
       projectId: project.id,
       scope: query.scope ?? "all",
@@ -252,7 +277,10 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "project.forbidden", "Project access denied");
     }
 
-    const issue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
+    const issue = await getIssueUseCase(fastify.issueRepository, {
+      issueKey: params.issueKey,
+      projectId: project.id
+    });
 
     if (!issue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
