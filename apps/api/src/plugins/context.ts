@@ -32,6 +32,16 @@ import { sendError } from "../errors.js";
 import { createAttachmentStorageFromEnv } from "../attachment-storage-factory.js";
 import type { AttachmentStorage } from "../attachment-storage.js";
 
+type AuditInput = {
+  action: string;
+  actorId: string;
+  resourceId: string;
+  workspaceId?: string;
+  projectId?: string;
+  issueId?: string;
+  payload?: Record<string, unknown>;
+};
+
 declare module "fastify" {
   interface FastifyInstance {
     database: Database;
@@ -68,6 +78,7 @@ declare module "fastify" {
       issueId?: string;
       payload?: Record<string, unknown>;
     }): Promise<void>;
+    recordAuditBatch(inputs: AuditInput[]): Promise<void>;
     filterIssuesByScope<TIssue extends { assigneeUserId: string | null; reporterUserId: string }>(
       issues: TIssue[],
       userId: string,
@@ -176,24 +187,19 @@ const contextPlugin: FastifyPluginAsync<ContextOptions> = async (fastify, option
     });
   });
 
-  fastify.decorate("recordAudit", async (input: {
-    action: string;
-    actorId: string;
-    resourceId: string;
-    workspaceId?: string;
-    projectId?: string;
-    issueId?: string;
-    payload?: Record<string, unknown>;
-  }) => {
-    const auditEvent = recordAuditEvent({
-      action: input.action,
-      actorId: input.actorId,
-      resourceId: input.resourceId
-    });
+  fastify.decorate("recordAuditBatch", async (inputs: AuditInput[]) => {
+    if (inputs.length === 0) {
+      return;
+    }
 
-    await database
-      .insertInto("audit_events")
-      .values({
+    const rows = inputs.map((input) => {
+      const auditEvent = recordAuditEvent({
+        action: input.action,
+        actorId: input.actorId,
+        resourceId: input.resourceId
+      });
+
+      return {
         action: auditEvent.action,
         actor_id: auditEvent.actorId,
         id: auditEvent.id,
@@ -203,8 +209,14 @@ const contextPlugin: FastifyPluginAsync<ContextOptions> = async (fastify, option
         project_id: input.projectId ?? null,
         resource_id: auditEvent.resourceId,
         workspace_id: input.workspaceId ?? null
-      })
-      .execute();
+      };
+    });
+
+    await database.insertInto("audit_events").values(rows).execute();
+  });
+
+  fastify.decorate("recordAudit", async (input: AuditInput) => {
+    await fastify.recordAuditBatch([input]);
   });
 
   fastify.decorate("filterIssuesByScope", <TIssue extends {
@@ -444,14 +456,14 @@ const contextPlugin: FastifyPluginAsync<ContextOptions> = async (fastify, option
   });
 
   fastify.decorate("resolveProjectLabels", async (projectId: string, labelIds: string[] | undefined) => {
-    const labels = await issueRepository.listLabels(projectId);
     const requested = new Set(labelIds ?? []);
 
     if (requested.size === 0) {
-      return [] as typeof labels;
+      return [];
     }
 
-    const selected = labels.filter((label) => requested.has(label.id));
+    await issueRepository.ensureDefaultLabels(projectId);
+    const selected = await issueRepository.findLabelsByIds(projectId, [...requested]);
 
     if (selected.length !== requested.size) {
       throw new Error("One or more labels do not belong to this project.");

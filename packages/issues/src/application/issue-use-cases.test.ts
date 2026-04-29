@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ProjectId } from "@wevlo/core";
 
 import { createIssue } from "../domain/issue";
+import { toIssueListItem } from "./issue-views";
 import { acceptTriageUseCase } from "./accept-triage";
 import { commentOnIssueUseCase } from "./comment-on-issue";
 import { createIssueUseCase } from "./create-issue";
@@ -19,13 +20,52 @@ const makeRepository = () => {
 
   return {
     addReaction: vi.fn(),
+    appendComment: vi.fn(async (input: {
+      comment: ReturnType<typeof createIssue>["comments"][number];
+      issueId: string;
+      updatedAt: string;
+    }) => {
+      const issue = [...issues.values()].find((candidate) => candidate.id === input.issueId);
+      if (!issue) {
+        throw new Error(`Issue not found: ${input.issueId}`);
+      }
+
+      issues.set(`${issue.projectId}:${issue.issueKey}`, {
+        ...issue,
+        comments: [...issue.comments, input.comment],
+        updatedAt: input.updatedAt
+      });
+    }),
     createAttachment: vi.fn(),
     createLabel: vi.fn(),
     deleteAttachment: vi.fn(),
+    ensureDefaultLabels: vi.fn(),
+    ensureSubscriptions: vi.fn(),
     findByKey: vi.fn(async (projectId: string, issueKey: string) => {
       return issues.get(`${projectId}:${issueKey}`) ?? null;
     }),
     findAttachment: vi.fn(),
+    findIssueIdentityByKey: vi.fn(async (projectId: string, issueKey: string) => {
+      const issue = issues.get(`${projectId}:${issueKey}`) ?? null;
+      if (!issue) {
+        return null;
+      }
+
+      return {
+        assigneeUserId: issue.assigneeUserId,
+        dueDate: issue.dueDate,
+        id: issue.id,
+        issueKey: issue.issueKey,
+        parentIssueId: issue.parentIssueId,
+        priority: issue.priority,
+        projectId: issue.projectId,
+        reporterUserId: issue.reporterUserId,
+        state: issue.state,
+        title: issue.title,
+        triageStatus: issue.triageStatus
+      };
+    }),
+    findLabelsByIds: vi.fn(async () => []),
     findBySourceLink: vi.fn(async (input: {
       projectId: string;
       provider: string;
@@ -45,8 +85,30 @@ const makeRepository = () => {
         ) ?? null
       );
     }),
+    getSubscriptionState: vi.fn(),
+    hasReaction: vi.fn(async () => false),
     listByProject: vi.fn(async (projectId: string) => {
       return [...issues.values()].filter((issue) => issue.projectId === projectId);
+    }),
+    listIssueSummariesByProject: vi.fn(async (input: {
+      projectId: string;
+      scope?: "all" | "assigned" | "created";
+      userId?: string;
+    }) => {
+      return [...issues.values()]
+        .filter((issue) => issue.projectId === input.projectId)
+        .filter((issue) => {
+          if (input.scope === "assigned") {
+            return issue.assigneeUserId === input.userId;
+          }
+
+          if (input.scope === "created") {
+            return issue.reporterUserId === input.userId;
+          }
+
+          return true;
+        })
+        .map(toIssueListItem);
     }),
     listLabels: vi.fn(async () => []),
     nextIssueNumber: vi.fn(async (projectId: string) => {
@@ -58,6 +120,7 @@ const makeRepository = () => {
     save: vi.fn(async (issue: ReturnType<typeof createIssue>) => {
       issues.set(`${issue.projectId}:${issue.issueKey}`, issue);
     }),
+    setSubscription: vi.fn(),
     seed: (issue: ReturnType<typeof createIssue>) => {
       issues.set(`${issue.projectId}:${issue.issueKey}`, issue);
     }
@@ -136,8 +199,8 @@ describe("issue application use cases", () => {
       projectId: issue.projectId
     });
 
-    expect(updated.dueDate).toBeNull();
-    expect(updated.labels.map((label) => label.id)).toEqual(["label_feature"]);
+    expect(updated.issue.dueDate).toBeNull();
+    expect(updated.issue.labels.map((label) => label.id)).toEqual(["label_feature"]);
   });
 
   it("creates a sub-issue linked to its parent issue", async () => {
@@ -259,8 +322,8 @@ describe("issue application use cases", () => {
       projectId: issue.projectId
     });
 
-    expect(updated.priority).toBe("high");
-    expect(updated.assigneeUserId).toBe("user_2");
+    expect(updated.issue.priority).toBe("high");
+    expect(updated.issue.assigneeUserId).toBe("user_2");
 
     await expect(
       updateIssueUseCase(repository, {
@@ -307,8 +370,8 @@ describe("issue application use cases", () => {
       projectId: issue.projectId
     });
 
-    expect(commented.comments).toHaveLength(1);
-    expect(commented.comments[0]?.body).toBe("Please inspect");
+    expect(commented.issue.comments).toHaveLength(1);
+    expect(commented.issue.comments[0]?.body).toBe("Please inspect");
 
     const triaged = await triageIssueUseCase(repository, {
       actor: "local",
@@ -318,9 +381,9 @@ describe("issue application use cases", () => {
       projectId: issue.projectId
     });
 
-    expect(triaged.priority).toBe("urgent");
-    expect(triaged.assigneeUserId).toBe("user_3");
-    expect(triaged.triageStatus).toBe("pending");
+    expect(triaged.issue.priority).toBe("urgent");
+    expect(triaged.issue.assigneeUserId).toBe("user_3");
+    expect(triaged.issue.triageStatus).toBe("pending");
 
     const accepted = await acceptTriageUseCase(repository, {
       actor: "local",

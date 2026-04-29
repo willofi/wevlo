@@ -17,7 +17,11 @@ export type CommentOnIssueInput = {
 export const commentOnIssueUseCase = async (
   repository: IssueRepository,
   input: CommentOnIssueInput
-): Promise<IssueDetailDto> => {
+): Promise<{
+  createdComment: IssueCommentDto;
+  issue: IssueDetailDto;
+  previousIssue: IssueDetailDto;
+}> => {
   const issue = await repository.findByKey(input.projectId, input.issueKey);
 
   if (!issue) {
@@ -38,6 +42,15 @@ export const commentOnIssueUseCase = async (
     updatedAt: new Date().toISOString()
   };
 
-  await repository.save(updated);
-  return updated;
+  await repository.appendComment({
+    comment,
+    issueId: issue.id,
+    updatedAt: updated.updatedAt
+  });
+
+  return {
+    createdComment: comment,
+    issue: updated,
+    previousIssue: issue
+  };
 };

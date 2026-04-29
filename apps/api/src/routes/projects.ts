@@ -70,6 +70,7 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
         ownerUserId: userId,
         workspaceId: workspace.id
       });
+      await fastify.issueRepository.ensureDefaultLabels(project.id);
       const readableProject = await getProjectByKeyUseCase(fastify.projectRepository, {
         projectKey: project.key,
         userId,

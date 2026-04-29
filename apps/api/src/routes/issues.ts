@@ -116,10 +116,12 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const issues = await listIssuesUseCase(fastify.issueRepository, {
-      projectId: project.id
+      projectId: project.id,
+      scope: query.scope ?? "all",
+      userId
     });
 
-    return reply.send(fastify.filterIssuesByScope(issues, userId, query.scope ?? "all"));
+    return reply.send(issues);
   });
 
   fastify.post("/workspaces/:workspaceSlug/projects/:projectKey/issues", async (request, reply) => {
@@ -162,10 +164,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (payload.parentIssueKey) {
-      const parentIssue = await getIssueUseCase(fastify.issueRepository, {
-        issueKey: payload.parentIssueKey,
-        projectId: project.id
-      });
+      const parentIssue = await fastify.issueRepository.findIssueIdentityByKey(project.id, payload.parentIssueKey);
 
       if (!parentIssue) {
         return sendError(reply, 400, "issue.parent_not_found", "Parent issue not found");
@@ -253,10 +252,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "project.forbidden", "Project access denied");
     }
 
-    const issue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
+    const issue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
 
     if (!issue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
@@ -369,15 +365,6 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "issue.forbidden", "Issue editing denied");
     }
 
-    const previousIssue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
-
-    if (!previousIssue) {
-      return sendError(reply, 404, "issue.not_found", "Issue not found");
-    }
-
     const workspaceMembers =
       payload.description !== undefined
         ? await listWorkspaceMembersUseCase(fastify.identityRepository, workspace.id)
@@ -392,11 +379,6 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       payload.description !== undefined
         ? extractIssueMentions(payload.description, mentionableUsers)
         : undefined;
-
-    const previousDescriptionMentions =
-      payload.description !== undefined
-        ? extractIssueMentions(previousIssue.description, mentionableUsers)
-        : [];
 
     let labels: any[] | undefined;
 
@@ -415,17 +397,32 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
     };
 
     if (Object.keys(changes).length === 0) {
-      return reply.send(previousIssue);
+      const issue = await getIssueUseCase(fastify.issueRepository, {
+        issueKey: params.issueKey,
+        projectId: project.id
+      });
+
+      if (!issue) {
+        return sendError(reply, 404, "issue.not_found", "Issue not found");
+      }
+
+      return reply.send(issue);
     }
 
-    const issue = await fastify.database.transaction().execute(async (trx) => {
+    const { issue, previousIssue } = await fastify.database.transaction().execute(async (trx) => {
       const scoped = fastify.createScopedRepositories(trx);
-      const updatedIssue = await updateIssueUseCase(scoped.issueRepository, {
+      const result = await updateIssueUseCase(scoped.issueRepository, {
         actor: "local",
         changes,
         issueKey: params.issueKey,
         projectId: project.id
       });
+      const updatedIssue = result.issue;
+      const previousIssue = result.previousIssue;
+      const previousDescriptionMentions =
+        descriptionMentions !== undefined
+          ? extractIssueMentions(previousIssue.description, mentionableUsers)
+          : [];
 
       if (
         payload.assigneeUserId !== undefined &&
@@ -475,24 +472,22 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      return updatedIssue;
+      return result;
     });
 
     const actions = Object.keys(changes).filter(key => key !== "descriptionMentions");
-    for (const actionKey of actions) {
-      await fastify.recordAudit({
-        action: `issue.update.${actionKey}`,
-        actorId: currentUser.id,
-        issueId: issue.id,
-        payload: {
-          from: (previousIssue as any)[actionKey],
-          to: (issue as any)[actionKey]
-        },
-        projectId: project.id,
-        resourceId: issue.id,
-        workspaceId: workspace.id
-      });
-    }
+    await fastify.recordAuditBatch(actions.map((actionKey) => ({
+      action: `issue.update.${actionKey}`,
+      actorId: currentUser.id,
+      issueId: issue.id,
+      payload: {
+        from: (previousIssue as any)[actionKey],
+        to: (issue as any)[actionKey]
+      },
+      projectId: project.id,
+      resourceId: issue.id,
+      workspaceId: workspace.id
+    })));
 
     return reply.send(issue);
   });
@@ -574,15 +569,6 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const previousIssue = await getIssueUseCase(fastify.issueRepository, {
-        issueKey: params.issueKey,
-        projectId: project.id
-      });
-
-      if (!previousIssue) {
-        return sendError(reply, 404, "issue.not_found", "Issue not found");
-      }
-
       const workspaceMembers = await listWorkspaceMembersUseCase(fastify.identityRepository, workspace.id);
       const mentions = extractCommentMentions(
         payload.body,
@@ -594,7 +580,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
 
       const issue = await fastify.database.transaction().execute(async (trx) => {
         const scoped = fastify.createScopedRepositories(trx);
-        const updatedIssue = await commentOnIssueUseCase(scoped.issueRepository, {
+        const result = await commentOnIssueUseCase(scoped.issueRepository, {
           authorUserId: currentUser.id,
           body: payload.body,
           issueKey: params.issueKey,
@@ -602,10 +588,9 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
           parentCommentId: payload.parentCommentId ?? null,
           projectId: project.id
         });
-        const previousCommentIds = new Set(previousIssue.comments.map((comment) => comment.id));
-        const createdComment =
-          updatedIssue.comments.find((comment) => !previousCommentIds.has(comment.id)) ??
-          updatedIssue.comments[updatedIssue.comments.length - 1];
+        const updatedIssue = result.issue;
+        const previousIssue = result.previousIssue;
+        const createdComment = result.createdComment;
 
         if (createdComment) {
           await scoped.issueRepository.ensureSubscriptions({
@@ -713,10 +698,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "issue.forbidden", "Issue attachment upload denied");
     }
 
-    const issue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
+    const issue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
 
     if (!issue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
@@ -807,10 +789,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "project.forbidden", "Project access denied");
     }
 
-    const issue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
+    const issue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
 
     if (!issue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
@@ -854,10 +833,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "issue.forbidden", "Issue attachment deletion denied");
     }
 
-    const issue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
+    const issue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
 
     if (!issue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
@@ -910,18 +886,17 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "project.forbidden", "Project access denied");
     }
 
-    const existingIssue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
+    const existingIssue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
 
     if (!existingIssue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
     }
 
-    const hasExistingReaction = existingIssue.reactions.some(
-      (reaction) => reaction.emoji === payload.emoji && reaction.userIds.includes(currentUser.id)
-    );
+    const hasExistingReaction = await fastify.issueRepository.hasReaction({
+      emoji: payload.emoji,
+      issueId: existingIssue.id,
+      userId: currentUser.id
+    });
     const shouldActivate = payload.active ?? !hasExistingReaction;
 
     const issue = await fastify.database.transaction().execute(async (trx) => {
@@ -990,10 +965,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "project.forbidden", "Project access denied");
     }
 
-    const issue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
+    const issue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
 
     if (!issue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
@@ -1025,10 +997,7 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, 403, "project.forbidden", "Project access denied");
     }
 
-    const issue = await getIssueUseCase(fastify.issueRepository, {
-      issueKey: params.issueKey,
-      projectId: project.id
-    });
+    const issue = await fastify.issueRepository.findIssueIdentityByKey(project.id, params.issueKey);
 
     if (!issue) {
       return sendError(reply, 404, "issue.not_found", "Issue not found");
@@ -1067,15 +1036,6 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const previousIssue = await getIssueUseCase(fastify.issueRepository, {
-        issueKey: params.issueKey,
-        projectId: project.id
-      });
-
-      if (!previousIssue) {
-        return sendError(reply, 404, "issue.not_found", "Issue not found");
-      }
-
       const triageInput = {
         actor: "local" as const,
         issueKey: params.issueKey,
@@ -1086,9 +1046,11 @@ const issueRoutes: FastifyPluginAsync = async (fastify) => {
 
       const issue = await fastify.database.transaction().execute(async (trx) => {
         const scoped = fastify.createScopedRepositories(trx);
-        const updatedIssue = await triageIssueUseCase(scoped.issueRepository, {
+        const result = await triageIssueUseCase(scoped.issueRepository, {
           ...triageInput
         });
+        const updatedIssue = result.issue;
+        const previousIssue = result.previousIssue;
 
         if (
           payload.assigneeUserId !== undefined &&

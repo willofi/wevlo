@@ -2,6 +2,7 @@ import pg from "pg";
 import { Kysely, PostgresDialect, sql, type Transaction } from "kysely";
 
 import { getDatabaseUrl } from "./config";
+import { getDbQueryMetrics } from "./query-metrics";
 import type { DatabaseSchema } from "./schema";
 
 const { Pool } = pg;
@@ -84,6 +85,17 @@ export const createDatabase = (connectionString = getDatabaseUrl()): Database =>
           sql: truncateSql(event.query.sql),
           paramsCount: event.query.parameters.length
         }));
+      }
+
+      if (event.level === "query") {
+        const metrics = getDbQueryMetrics();
+        if (metrics) {
+          metrics.queryCount += 1;
+          metrics.totalDurationMs += event.queryDurationMillis;
+          if (event.queryDurationMillis >= dbQueryLogMinMs) {
+            metrics.slowQueryCount += 1;
+          }
+        }
       }
 
       if (event.level === "error") {

@@ -16,7 +16,10 @@ export type TriageIssueInput = {
 export const triageIssueUseCase = async (
   repository: IssueRepository,
   input: TriageIssueInput
-): Promise<IssueDetailDto> => {
+): Promise<{
+  issue: IssueDetailDto;
+  previousIssue: IssueDetailDto;
+}> => {
   const issue = await repository.findByKey(input.projectId, input.issueKey);
 
   if (!issue) {
@@ -41,7 +44,10 @@ export const triageIssueUseCase = async (
     );
 
     await repository.save(triaged);
-    return triaged;
+    return {
+      issue: triaged,
+      previousIssue: issue
+    };
   } catch (error) {
     if (error instanceof Error) {
       throw new IssueMutationNotAllowedError(error.message, input.actor);

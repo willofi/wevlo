@@ -2,6 +2,7 @@ import { createEntityId } from "@wevlo/core";
 import type {
   IssueAttachmentDto,
   IssueLabelDto,
+  IssueListItemDto,
   IssueMentionDto,
   IssueReactionDto,
   IssueSubscriptionStateDto,
@@ -10,7 +11,12 @@ import type {
 } from "@wevlo/contracts";
 import { sql, type DatabaseExecutor } from "@wevlo/data-access";
 
-import type { CreateIssueAttachmentInput, CreateIssueLabelInput, IssueRepository } from "../application/issue-repository";
+import type {
+  CreateIssueAttachmentInput,
+  CreateIssueLabelInput,
+  IssueIdentity,
+  IssueRepository
+} from "../application/issue-repository";
 import { asIssueReference, type Issue } from "../domain/issue";
 
 type IssueRow = {
@@ -127,6 +133,72 @@ const mapAttachment = (row: AttachmentRow): IssueAttachmentDto & { storageKey: s
   url: `/attachments/${row.id}`
 });
 
+const mapIssueIdentity = (row: Pick<
+  IssueRow,
+  | "assignee_user_id"
+  | "due_at"
+  | "id"
+  | "issue_key"
+  | "parent_issue_id"
+  | "priority"
+  | "project_id"
+  | "reporter_user_id"
+  | "state"
+  | "title"
+  | "triage_status"
+>): IssueIdentity => ({
+  assigneeUserId: row.assignee_user_id,
+  dueDate: row.due_at,
+  id: row.id,
+  issueKey: row.issue_key,
+  parentIssueId: row.parent_issue_id,
+  priority: row.priority,
+  projectId: row.project_id,
+  reporterUserId: row.reporter_user_id,
+  state: row.state,
+  title: row.title,
+  triageStatus: row.triage_status
+});
+
+const buildIssueListItem = (
+  row: Pick<
+    IssueRow,
+    | "assignee_user_id"
+    | "created_at"
+    | "due_at"
+    | "id"
+    | "issue_key"
+    | "issue_number"
+    | "parent_issue_id"
+    | "priority"
+    | "project_id"
+    | "reporter_user_id"
+    | "state"
+    | "title"
+    | "triage_status"
+    | "updated_at"
+  >,
+  labels: IssueLabelDto[],
+  sourceLinks: Issue["sourceLinks"]
+): IssueListItemDto => ({
+  assigneeUserId: row.assignee_user_id,
+  createdAt: row.created_at,
+  dueDate: row.due_at,
+  id: row.id,
+  issueKey: row.issue_key,
+  issueNumber: row.issue_number,
+  labels,
+  parentIssueId: row.parent_issue_id,
+  priority: row.priority,
+  projectId: row.project_id,
+  reporterUserId: row.reporter_user_id,
+  sourceLinks,
+  state: row.state,
+  title: row.title,
+  triageStatus: row.triage_status,
+  updatedAt: row.updated_at
+});
+
 export class PostgresIssueRepository implements IssueRepository {
   constructor(private readonly database: DatabaseExecutor) {}
 
@@ -147,6 +219,47 @@ export class PostgresIssueRepository implements IssueRepository {
       .execute();
   }
 
+  async appendComment(input: {
+    comment: Issue["comments"][number];
+    issueId: string;
+    updatedAt: string;
+  }): Promise<void> {
+    await this.database
+      .insertInto("issue_comments")
+      .values({
+        author_user_id: input.comment.authorUserId,
+        body: input.comment.body,
+        created_at: input.comment.createdAt,
+        id: input.comment.id,
+        issue_id: input.issueId,
+        parent_comment_id: input.comment.parentCommentId
+      })
+      .execute();
+
+    if (input.comment.mentions.length > 0) {
+      await this.database
+        .insertInto("issue_comment_mentions")
+        .values(
+          input.comment.mentions.map((mention) => ({
+            comment_id: input.comment.id,
+            end_offset: mention.endOffset,
+            mentioned_handle: mention.handle,
+            mentioned_user_id: mention.userId,
+            start_offset: mention.startOffset
+          }))
+        )
+        .execute();
+    }
+
+    await this.database
+      .updateTable("issues")
+      .set({
+        updated_at: input.updatedAt
+      })
+      .where("id", "=", input.issueId)
+      .execute();
+  }
+
   async findByKey(projectId: string, issueKey: string): Promise<Issue | null> {
     const row = await this.database
       .selectFrom("issues")
@@ -161,6 +274,45 @@ export class PostgresIssueRepository implements IssueRepository {
 
     const [issue] = await this.hydrateIssues([row]);
     return issue ?? null;
+  }
+
+  async findIssueIdentityByKey(projectId: string, issueKey: string): Promise<IssueIdentity | null> {
+    const row = await this.database
+      .selectFrom("issues")
+      .select([
+        "assignee_user_id",
+        "due_at",
+        "id",
+        "issue_key",
+        "parent_issue_id",
+        "priority",
+        "project_id",
+        "reporter_user_id",
+        "state",
+        "title",
+        "triage_status"
+      ])
+      .where("project_id", "=", projectId)
+      .where("issue_key", "=", issueKey.toUpperCase())
+      .executeTakeFirst();
+
+    return row ? mapIssueIdentity(row as IssueRow) : null;
+  }
+
+  async findLabelsByIds(projectId: string, labelIds: string[]): Promise<IssueLabelDto[]> {
+    if (labelIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.database
+      .selectFrom("project_issue_labels")
+      .selectAll()
+      .where("project_id", "=", projectId)
+      .where("id", "in", labelIds)
+      .orderBy("name", "asc")
+      .execute();
+
+    return (rows as LabelRow[]).map(mapLabel);
   }
 
   async findBySourceLink(input: {
@@ -197,7 +349,116 @@ export class PostgresIssueRepository implements IssueRepository {
       .orderBy("issue_number", "asc")
       .execute();
 
-    return this.hydrateIssues(rows);
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const issueIds = rows.map((row) => row.id);
+    const [labelRows, sourceLinkRows] = await Promise.all([
+      this.database
+        .selectFrom("issue_label_assignments")
+        .innerJoin("project_issue_labels", "project_issue_labels.id", "issue_label_assignments.label_id")
+        .select([
+          "issue_label_assignments.issue_id as issue_id",
+          "project_issue_labels.id as id",
+          "project_issue_labels.project_id as project_id",
+          "project_issue_labels.name as name",
+          "project_issue_labels.color as color",
+          "project_issue_labels.created_at as created_at",
+          "project_issue_labels.updated_at as updated_at"
+        ])
+        .where("issue_label_assignments.issue_id", "in", issueIds)
+        .orderBy("project_issue_labels.name", "asc")
+        .execute(),
+      this.database
+        .selectFrom("issue_source_links")
+        .selectAll()
+        .where("issue_id", "in", issueIds)
+        .orderBy("created_at", "asc")
+        .execute()
+    ]);
+
+    const labelsByIssueId = this.groupLabelsByIssueId(labelRows as Array<LabelRow & { issue_id: string }>);
+    const sourceLinksByIssueId = this.groupSourceLinksByIssueId(sourceLinkRows);
+
+    return rows.map((row) => ({
+      ...buildIssueListItem(row, labelsByIssueId.get(row.id) ?? [], sourceLinksByIssueId.get(row.id) ?? []),
+      attachments: [],
+      comments: [],
+      description: row.description,
+      descriptionMentions: [],
+      parent: null,
+      reactions: [],
+      subIssues: []
+    }));
+  }
+
+  async listIssueSummariesByProject(input: {
+    projectId: string;
+    scope?: "all" | "assigned" | "created";
+    userId?: string;
+  }): Promise<IssueListItemDto[]> {
+    let query = this.database
+      .selectFrom("issues")
+      .select([
+        "assignee_user_id",
+        "created_at",
+        "due_at",
+        "id",
+        "issue_key",
+        "issue_number",
+        "parent_issue_id",
+        "priority",
+        "project_id",
+        "reporter_user_id",
+        "state",
+        "title",
+        "triage_status",
+        "updated_at"
+      ])
+      .where("project_id", "=", input.projectId);
+
+    if (input.scope === "assigned" && input.userId) {
+      query = query.where("assignee_user_id", "=", input.userId);
+    } else if (input.scope === "created" && input.userId) {
+      query = query.where("reporter_user_id", "=", input.userId);
+    }
+
+    const rows = await query.orderBy("issue_number", "asc").execute();
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const issueIds = rows.map((row) => row.id);
+    const [labelRows, sourceLinkRows] = await Promise.all([
+      this.database
+        .selectFrom("issue_label_assignments")
+        .innerJoin("project_issue_labels", "project_issue_labels.id", "issue_label_assignments.label_id")
+        .select([
+          "issue_label_assignments.issue_id as issue_id",
+          "project_issue_labels.id as id",
+          "project_issue_labels.project_id as project_id",
+          "project_issue_labels.name as name",
+          "project_issue_labels.color as color",
+          "project_issue_labels.created_at as created_at",
+          "project_issue_labels.updated_at as updated_at"
+        ])
+        .where("issue_label_assignments.issue_id", "in", issueIds)
+        .orderBy("project_issue_labels.name", "asc")
+        .execute(),
+      this.database
+        .selectFrom("issue_source_links")
+        .selectAll()
+        .where("issue_id", "in", issueIds)
+        .orderBy("created_at", "asc")
+        .execute()
+    ]);
+
+    const labelsByIssueId = this.groupLabelsByIssueId(labelRows as Array<LabelRow & { issue_id: string }>);
+    const sourceLinksByIssueId = this.groupSourceLinksByIssueId(sourceLinkRows);
+
+    return rows.map((row) => buildIssueListItem(row, labelsByIssueId.get(row.id) ?? [], sourceLinksByIssueId.get(row.id) ?? []));
   }
 
   async listLabels(projectId: string): Promise<IssueLabelDto[]> {
@@ -243,6 +504,22 @@ export class PostgresIssueRepository implements IssueRepository {
       .execute();
 
     return mapLabel(row);
+  }
+
+  async hasReaction(input: {
+    emoji: string;
+    issueId: string;
+    userId: string;
+  }): Promise<boolean> {
+    const row = await this.database
+      .selectFrom("issue_reactions")
+      .select("issue_id")
+      .where("emoji", "=", input.emoji)
+      .where("issue_id", "=", input.issueId)
+      .where("user_id", "=", input.userId)
+      .executeTakeFirst();
+
+    return Boolean(row);
   }
 
   async createAttachment(input: CreateIssueAttachmentInput): Promise<IssueAttachmentDto> {
@@ -324,16 +601,10 @@ export class PostgresIssueRepository implements IssueRepository {
   }
 
   async save(issue: Issue): Promise<void> {
-    console.info(`Saving issue ${issue.issueKey} (${issue.id})`);
-    
-    await this.database.transaction().execute(async (trx) => {
-      await this.persistIssue(trx, issue);
-    });
+    await this.persistIssue(this.database, issue);
   }
 
   private async persistIssue(executor: DatabaseExecutor, issue: Issue): Promise<void> {
-    console.info(`Persisting issue ${issue.issueKey} (${issue.id})`);
-    
     await executor
         .insertInto("issues")
         .values({
@@ -528,27 +799,26 @@ export class PostgresIssueRepository implements IssueRepository {
     }
 
     const now = new Date().toISOString();
-
-    for (const userId of uniqueUserIds) {
-      await this.database
-        .insertInto("issue_subscriptions")
-        .values({
+    await this.database
+      .insertInto("issue_subscriptions")
+      .values(
+        uniqueUserIds.map((userId) => ({
           created_at: now,
           is_active: true,
           issue_id: input.issueId,
           manually_unsubscribed: false,
           updated_at: now,
           user_id: userId
+        }))
+      )
+      .onConflict((conflict) =>
+        conflict.columns(["issue_id", "user_id"]).doUpdateSet({
+          is_active: sql<boolean>`case when issue_subscriptions.manually_unsubscribed then issue_subscriptions.is_active else true end`,
+          manually_unsubscribed: sql<boolean>`case when issue_subscriptions.manually_unsubscribed then true else false end`,
+          updated_at: sql<string>`case when issue_subscriptions.manually_unsubscribed then issue_subscriptions.updated_at else ${now} end`
         })
-        .onConflict((conflict) =>
-          conflict.columns(["issue_id", "user_id"]).doUpdateSet({
-            is_active: sql<boolean>`case when issue_subscriptions.manually_unsubscribed then issue_subscriptions.is_active else true end`,
-            manually_unsubscribed: sql<boolean>`case when issue_subscriptions.manually_unsubscribed then true else false end`,
-            updated_at: sql<string>`case when issue_subscriptions.manually_unsubscribed then issue_subscriptions.updated_at else ${now} end`
-          })
-        )
-        .execute();
-    }
+      )
+      .execute();
   }
 
   async listPersonalIssues(input: {
@@ -846,7 +1116,7 @@ export class PostgresIssueRepository implements IssueRepository {
     );
   }
 
-  private async ensureDefaultLabels(projectId: string): Promise<void> {
+  async ensureDefaultLabels(projectId: string): Promise<void> {
     const now = new Date().toISOString();
     const defaults = [
       { color: "red", id: `${projectId}:label:bug`, name: "Bug" },
@@ -854,20 +1124,64 @@ export class PostgresIssueRepository implements IssueRepository {
       { color: "blue", id: `${projectId}:label:improvement`, name: "Improvement" }
     ];
 
-    for (const label of defaults) {
-      await this.database
-        .insertInto("project_issue_labels")
-        .values({
+    await this.database
+      .insertInto("project_issue_labels")
+      .values(
+        defaults.map((label) => ({
           color: label.color,
           created_at: now,
           id: label.id,
           name: label.name,
           project_id: projectId,
           updated_at: now
-        })
-        .onConflict((conflict) => conflict.column("id").doNothing())
-        .execute();
+        }))
+      )
+      .onConflict((conflict) => conflict.column("id").doNothing())
+      .execute();
+  }
+
+  private groupLabelsByIssueId(rows: Array<LabelRow & { issue_id: string }>): Map<string, IssueLabelDto[]> {
+    const labelsByIssueId = new Map<string, IssueLabelDto[]>();
+
+    for (const label of rows) {
+      const current = labelsByIssueId.get(label.issue_id) ?? [];
+      current.push(mapLabel(label));
+      labelsByIssueId.set(label.issue_id, current);
     }
+
+    return labelsByIssueId;
+  }
+
+  private groupSourceLinksByIssueId(rows: Array<{
+    created_at: string;
+    external_id: string;
+    external_key: string | null;
+    external_project_id: string | null;
+    external_url: string | null;
+    installation_id: string | null;
+    issue_id: string;
+    last_synced_at: string | null;
+    provider: Issue["sourceLinks"][number]["provider"];
+    source_of_truth: Issue["sourceLinks"][number]["sourceOfTruth"];
+  }>): Map<string, Issue["sourceLinks"]> {
+    const sourceLinksByIssueId = new Map<string, Issue["sourceLinks"]>();
+
+    for (const sourceLink of rows) {
+      const current = sourceLinksByIssueId.get(sourceLink.issue_id) ?? [];
+      current.push({
+        externalId: sourceLink.external_id,
+        externalKey: sourceLink.external_key ?? undefined,
+        externalProjectId: sourceLink.external_project_id ?? undefined,
+        externalUrl: sourceLink.external_url ?? undefined,
+        installationId: sourceLink.installation_id ?? undefined,
+        lastSyncedAt: sourceLink.last_synced_at ?? undefined,
+        provider: sourceLink.provider,
+        sourceOfTruth: sourceLink.source_of_truth
+      });
+      sourceLinksByIssueId.set(sourceLink.issue_id, current);
+    }
+
+    return sourceLinksByIssueId;
   }
 
   private async listPersonalIssueRows(input: {

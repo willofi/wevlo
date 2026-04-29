@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { ZodError } from "zod";
 
-import type { Database } from "@wevlo/data-access";
+import { runWithDbQueryMetrics, type Database, type DbQueryMetrics } from "@wevlo/data-access";
 import {
   IssueAlreadyExistsError,
   IssueMutationNotAllowedError,
@@ -51,8 +51,16 @@ export const buildApi = ({ database }: ApiDependencies) => {
     logger: true
   });
 
-  app.addHook("onRequest", async (request) => {
+  app.addHook("onRequest", (request, _reply, done) => {
+    const metrics: DbQueryMetrics = {
+      queryCount: 0,
+      slowQueryCount: 0,
+      totalDurationMs: 0
+    };
+
+    (request as any).__dbQueryMetrics = metrics;
     (request as any).__perfStartNs = process.hrtime.bigint();
+    runWithDbQueryMetrics(metrics, done);
   });
 
   app.addHook("onResponse", async (request, reply) => {
@@ -62,6 +70,20 @@ export const buildApi = ({ database }: ApiDependencies) => {
     }
 
     const durationMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
+    const route = request.routeOptions.url;
+    const dbMetrics = (request as any).__dbQueryMetrics as DbQueryMetrics | undefined;
+
+    if (dbMetrics && route && (route.includes("/issues") || route.includes("/board"))) {
+      request.log.info({
+        tag: "perf.db.request",
+        method: request.method,
+        route,
+        slowQueryCount: dbMetrics.slowQueryCount,
+        totalDbDurationMs: Number(dbMetrics.totalDurationMs.toFixed(1)),
+        totalQueryCount: dbMetrics.queryCount
+      }, "Request DB metrics");
+    }
+
     if (durationMs < httpLogMinMs) {
       return;
     }
@@ -70,7 +92,7 @@ export const buildApi = ({ database }: ApiDependencies) => {
       tag: "perf.http.slow",
       method: request.method,
       url: request.url,
-      route: request.routeOptions.url,
+      route,
       statusCode: reply.statusCode,
       durationMs: Number(durationMs.toFixed(1)),
       thresholdMs: httpLogMinMs

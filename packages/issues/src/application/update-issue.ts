@@ -14,7 +14,10 @@ export type UpdateIssueInput = {
 export const updateIssueUseCase = async (
   repository: IssueRepository,
   input: UpdateIssueInput
-): Promise<IssueDetailDto> => {
+): Promise<{
+  issue: IssueDetailDto;
+  previousIssue: IssueDetailDto;
+}> => {
   const issue = await repository.findByKey(input.projectId, input.issueKey);
 
   if (!issue) {
@@ -23,5 +26,8 @@ export const updateIssueUseCase = async (
 
   const updated = applyIssuePatch(issue, input.changes, input.actor);
   await repository.save(updated);
-  return updated;
+  return {
+    issue: updated,
+    previousIssue: issue
+  };
 };

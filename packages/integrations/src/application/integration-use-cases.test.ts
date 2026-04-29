@@ -17,6 +17,25 @@ import {
 import type { IntegrationRepository } from "./integration-repository";
 import type { IntegrationInstallation, IntegrationProjectLink, ProjectRef, SyncCursor, WebhookDelivery } from "../domain/integration";
 
+const toIssueListItem = (issue: ReturnType<typeof createIssue>) => ({
+  assigneeUserId: issue.assigneeUserId,
+  createdAt: issue.createdAt,
+  dueDate: issue.dueDate,
+  id: issue.id,
+  issueKey: issue.issueKey,
+  issueNumber: issue.issueNumber,
+  labels: issue.labels,
+  parentIssueId: issue.parentIssueId,
+  priority: issue.priority,
+  projectId: issue.projectId,
+  reporterUserId: issue.reporterUserId,
+  sourceLinks: issue.sourceLinks,
+  state: issue.state,
+  title: issue.title,
+  triageStatus: issue.triageStatus,
+  updatedAt: issue.updatedAt
+});
+
 const makeIssueRepository = (): IssueRepository & {
   issues: Map<string, ReturnType<typeof createIssue>>;
 } => {
@@ -24,11 +43,35 @@ const makeIssueRepository = (): IssueRepository & {
 
   return {
     addReaction: vi.fn(),
+    appendComment: vi.fn(),
     createAttachment: vi.fn(),
     createLabel: vi.fn(),
     deleteAttachment: vi.fn(),
+    ensureDefaultLabels: vi.fn(),
+    ensureSubscriptions: vi.fn(),
     findByKey: vi.fn(async (projectId: string, issueKey: string) => issues.get(`${projectId}:${issueKey}`) ?? null),
     findAttachment: vi.fn(),
+    findIssueIdentityByKey: vi.fn(async (projectId: string, issueKey: string) => {
+      const issue = issues.get(`${projectId}:${issueKey}`) ?? null;
+      if (!issue) {
+        return null;
+      }
+
+      return {
+        assigneeUserId: issue.assigneeUserId,
+        dueDate: issue.dueDate,
+        id: issue.id,
+        issueKey: issue.issueKey,
+        parentIssueId: issue.parentIssueId,
+        priority: issue.priority,
+        projectId: issue.projectId,
+        reporterUserId: issue.reporterUserId,
+        state: issue.state,
+        title: issue.title,
+        triageStatus: issue.triageStatus
+      };
+    }),
+    findLabelsByIds: vi.fn(async () => []),
     findBySourceLink: vi.fn(async (input) => {
       return (
         [...issues.values()].find(
@@ -43,9 +86,20 @@ const makeIssueRepository = (): IssueRepository & {
         ) ?? null
       );
     }),
+    getSubscriptionState: vi.fn(),
+    hasReaction: vi.fn(async () => false),
     issues,
     listLabels: vi.fn(async () => []),
     listByProject: vi.fn(async (projectId: string) => [...issues.values()].filter((issue) => issue.projectId === projectId)),
+    listIssueSummariesByProject: vi.fn(async (input: {
+      projectId: string;
+      scope?: "all" | "assigned" | "created";
+      userId?: string;
+    }) =>
+      [...issues.values()]
+        .filter((issue) => issue.projectId === input.projectId)
+        .map(toIssueListItem)
+    ),
     nextIssueNumber: vi.fn(async (projectId: string) => {
       const current = [...issues.values()].filter((issue) => issue.projectId === projectId).length;
       return current + 1;
@@ -53,7 +107,8 @@ const makeIssueRepository = (): IssueRepository & {
     removeReaction: vi.fn(),
     save: vi.fn(async (issue) => {
       issues.set(`${issue.projectId}:${issue.issueKey}`, issue);
-    })
+    }),
+    setSubscription: vi.fn()
   };
 };
 
